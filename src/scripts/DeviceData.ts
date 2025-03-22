@@ -2,6 +2,15 @@ import { ECharts } from 'echarts';
 
 const fontGridColor = '#000';
 
+class Chip {
+  name: string;
+  devices: (DeviceData | null)[];
+  constructor(name: string, devices: (DeviceData | null)[]) {
+    this.name = name;
+    this.devices = devices;
+  }
+}
+
 class DeviceData {
   name: string;
   is_vis: boolean;
@@ -11,9 +20,15 @@ class DeviceData {
   eqe: number[];
   wavelength: number[];
   spectra: number[][];
+  max_j: number;
+  max_lumi: number;
+  max_eqe: number;
+  valid_eqe: number;
+  leak_j: number;
   constructor(
     name: string, is_vis: boolean, u: number[], j: number[], luminance: number[],
-    eqe: number[], wavelength: number[], spectra: number[][]
+    eqe: number[], wavelength: number[], spectra: number[][], max_j: number,
+    max_lumi: number, max_eqe: number, valid_eqe: number, leak_j: number,
   ) {
     this.name = name;
     this.is_vis = is_vis;
@@ -23,6 +38,11 @@ class DeviceData {
     this.eqe = eqe;
     this.wavelength = wavelength;
     this.spectra = spectra;
+    this.max_j = max_j;
+    this.max_lumi = max_lumi;
+    this.max_eqe = max_eqe;
+    this.valid_eqe = valid_eqe;
+    this.leak_j = leak_j;
   }
 }
 
@@ -366,4 +386,4 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
   }
 }
 
-export { DeviceData, drawChart, drawSpectra }
+export { Chip, DeviceData, drawChart, drawSpectra }

@@ -62,9 +62,9 @@ function copyPerformance() {
         let row1 = 'V';
         let row2 = prop.data[0]!.name;
         for(var i = 0; i < prop.data.length; i ++) {
-            row0 +='\tJ\tLuminance\tEQE';
-            row1 +='\tmA/cm2\tcd/cm2\t%';
-            row2 +=`\t${prop.data[i]!.name}\t${prop.data[i]!.name}\t${prop.data[i]!.name}`;
+            row0 += prop.data[i]!.is_vis? '\tJ\tLuminance\tEQE': '\tJ\tRadiance\tEQE';
+            row1 += prop.data[i]!.is_vis? '\tmA/cm2\tcd/cm2\t%': '\tmA/cm2\tW/sr/m²\t%';
+            row2 += `\t${prop.data[i]!.name}\t${prop.data[i]!.name}\t${prop.data[i]!.name}`;
         }
         let str = `${row0}\n${row1}\n${row2}\n`;
         prop.data[0]!.u.forEach((uVal, index) => {
