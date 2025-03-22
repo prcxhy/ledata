@@ -4,7 +4,7 @@ import { computed, Ref, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import DataViewer from './components/DataViewer.vue';
 import Chip from "./components/Chip.vue";
-import { Chip as ChipData } from "./scripts/DeviceData";
+import { Chip as ChipData, DeviceData } from "./scripts/DeviceData";
 import IconOpen from "./assets/folder-open.svg?component"
 import IconExcel from "./assets/excel.svg?component"
 
@@ -52,6 +52,52 @@ watch(dataStatus, newStatus => {
   }
 });
 
+const filterMode = ['亮度/辐照度', '最大EQE', '有效EQE', '电流密度', '漏电流'];
+
+const filterModeIndex = ref(0);
+
+const filterMax = ref(0);
+const filterMin = ref(0);
+
+function updateMapping(newIndex: number) {
+  let array: number[];
+
+  let getArray = (callback: (device: DeviceData) => number) => {
+    return CHIPS.value.map(chip => {
+      let subArray: number[] = [];
+      chip.devices.forEach(device => {
+        if(device) {
+          subArray.push(callback(device));
+        }
+      });
+      return subArray;
+    }).flat();
+  }
+
+  if(newIndex == 0) {
+    array = getArray(device => device.max_lumi);
+  }
+  if(newIndex == 1) {
+    array = getArray(device => device.max_eqe);
+  }
+  if(newIndex == 2) {
+    array = getArray(device => device.valid_eqe);
+  }
+  if(newIndex == 3) {
+    array = getArray(device => device.max_j);
+  }
+  if(newIndex == 4) {
+    array = getArray(device => Math.log10(device.leak_j));
+  }
+
+  filterMax.value = Math.max(...array!);
+  filterMin.value = Math.min(...array!);
+}
+
+watch(filterModeIndex, newIndex => {
+  updateMapping(newIndex);
+})
+
 async function openDataFile() {
   let filePath = await open({
     multiple: false,
@@ -67,6 +113,7 @@ async function openDataFile() {
     .then(data => {
       let chip: ChipData = JSON.parse(data as string);
       CHIPS.value = [chip];
+      updateMapping(filterModeIndex.value)
     });
   }
 }
@@ -76,84 +123,17 @@ async function openDataPath() {
     directory: true,
     multiple: false
   });
-
+  
   if (path) {
     workingPath.value = path;
     invoke("open_path", {path: path})
     .then(data => {
       let chips: ChipData[] = JSON.parse(data as string);
       CHIPS.value = chips;
+      updateMapping(filterModeIndex.value)
     });
   }
 }
-
-const filterMode = ['亮度/辐照度', '最大EQE', '有效EQE', '电流密度', '漏电流'];
-
-const filterModeIndex = ref(0);
-
-const filterMax = ref(0);
-const filterMin = ref(0);
-
-watch(filterModeIndex, newIndex => {
-  let array: number[];
-  if(newIndex == 0) {
-    array = CHIPS.value.map(chip => {
-      let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if(device) {
-          subArray.push(device.max_lumi);
-        }
-      });
-      return subArray;
-    }).flat();
-  }
-  if(newIndex == 1) {
-    array = CHIPS.value.map(chip => {
-      let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if(device) {
-          subArray.push(device.max_eqe);
-        }
-      });
-      return subArray;
-    }).flat();
-  }
-  if(newIndex == 2) {
-    array = CHIPS.value.map(chip => {
-      let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if(device) {
-          subArray.push(device.valid_eqe);
-        }
-      });
-      return subArray;
-    }).flat();
-  }
-  if(newIndex == 3) {
-    array = CHIPS.value.map(chip => {
-      let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if(device) {
-          subArray.push(device.max_j);
-        }
-      });
-      return subArray;
-    }).flat();
-  }
-  if(newIndex == 4) {
-    array = CHIPS.value.map(chip => {
-      let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if(device) {
-          subArray.push(Math.log10(device.leak_j));
-        }
-      });
-      return subArray;
-    }).flat();
-  }
-  filterMax.value = Math.max(...array!);
-  filterMin.value = Math.min(...array!);
-})
 </script>
 
 <template>
