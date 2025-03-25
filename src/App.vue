@@ -97,7 +97,8 @@ function updateMapping(newIndex: number) {
     array = getArray(device => device.max_j);
   }
   if (newIndex == 4) {
-    array = getArray(device => Math.log10(device.leak_j));
+    // array = getArray(device => Math.log10(device.leak_j));
+    array = getArray(device => device.leak_j);
   }
 
   filterMax.value = Math.max(...array!);
@@ -169,7 +170,8 @@ const showMappingInfo = ref(false);
           <IconArrow v-if="showMappingInfo" />
         </button>
         <p v-if="showMappingInfo" id="mapping-mode-info">
-          {{ MappingModeInfo[MappingModeIndex] + "。😘当mapping颜色没有正常显示/自动刷新时, 手动切换一下mapping模式即可恢复正常😘" }}
+          <!-- {{ MappingModeInfo[MappingModeIndex] + "。😘当mapping颜色没有正常显示/自动刷新时, 手动切换一下mapping模式即可恢复正常😘" }} -->
+          {{ MappingModeInfo[MappingModeIndex] }}
         </p>
         <div id="filter-slot">
           <p v-for="(modeName, index) in filterMode" @click="MappingModeIndex = index" :class="[

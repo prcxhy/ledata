@@ -67,7 +67,7 @@ impl DeviceData {
             .luminance
             .iter()
             .position(|l| *l > 0.0)
-            .expect(&self.name);
+            .unwrap();
 
         self.valid_eqe = self.eqe[valid_index_from..]
             .to_vec()
@@ -126,12 +126,12 @@ where
                 .for_each(|(col, device)| {
                     let lumi = row[*col + 3].as_f64().unwrap().max(0.0);
                     let eqe = if lumi > 0.0 {
-                        row[*col + 4].as_f64().unwrap()
+                        row[*col + 4].as_f64().unwrap().max(0.0)
                     } else {
                         0.0
                     };
                     device.u[index] = row[*col].as_f64().unwrap();
-                    device.j[index] = row[*col + 2].as_f64().unwrap();
+                    device.j[index] = row[*col + 2].as_f64().unwrap().max(0.0);
                     device.luminance[index] = lumi;
                     device.eqe[index] = eqe;
                 });
@@ -142,12 +142,12 @@ where
                 .for_each(|(col, device)| {
                     let radi = row[*col + 6].as_f64().unwrap().max(0.0);
                     let eqe = if radi > 0.0 {
-                        row[*col + 5].as_f64().unwrap()
+                        row[*col + 5].as_f64().unwrap().max(0.0)
                     } else {
                         0.0
                     };
                     device.u[index] = row[*col].as_f64().unwrap();
-                    device.j[index] = row[*col + 7].as_f64().unwrap();
+                    device.j[index] = row[*col + 7].as_f64().unwrap().max(0.0);
                     device.luminance[index] = radi;
                     device.eqe[index] = eqe;
                 });

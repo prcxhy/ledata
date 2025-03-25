@@ -44,16 +44,29 @@ function getMappingColor(mode: number, device: DeviceData) {
         r = Math.round((device.max_lumi - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
     }
     if(mode == 1) {
+        // let a = (device.max_eqe - prop.filterMin) / (prop.filterMax - prop.filterMin);
+        // let b = (Math.log10(a * 9.9 + 0.1) + 1) / 2;
+        // r = Math.round(b * 223);
         r = Math.round((device.max_eqe - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
     }
     if(mode == 2) {
+        // let a = (device.valid_eqe - prop.filterMin) / (prop.filterMax - prop.filterMin);
+        // let b = (Math.log10(a * 9.9 + 0.1) + 1) / 2;
+        // r = Math.round(b * 223);
         r = Math.round((device.valid_eqe - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
     }
     if(mode == 3) {
         r = Math.round((device.max_j - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
     }
     if(mode == 4) {
-        r = Math.round((Math.log10(device.leak_j) - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
+        // let a = (device.leak_j - prop.filterMin) / (prop.filterMax - prop.filterMin);
+        // let b = (Math.log10(a * 9.999 + 0.001) + 3) / 4;
+        // r = Math.round(b * 223);
+        // r = Math.round((Math.log10(device.leak_j) - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
+        r = Math.round((device.leak_j - prop.filterMin) / (prop.filterMax - prop.filterMin) * 223);
+    }
+    if(Number.isNaN(r)) {
+        return `rgb(255, 0, 255)`
     }
     return `rgb(${r + 32}, 0, 0)`
 }
