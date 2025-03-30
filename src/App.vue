@@ -25,6 +25,8 @@ const dataShowing = computed(() => {
   return dataArray
 });
 
+const dataExclude: Ref<boolean[][]> = ref([[]]);
+
 const dataStatus = computed(() => {
   return CHIPS.value.map(chip => {
     return chip.devices.map(d => {
@@ -73,10 +75,10 @@ function updateMapping(newIndex: number) {
   let array: number[];
 
   let getArray = (callback: (device: DeviceData) => number) => {
-    return CHIPS.value.map(chip => {
+    return CHIPS.value.map((chip, ch) => {
       let subArray: number[] = [];
-      chip.devices.forEach(device => {
-        if (device) {
+      chip.devices.forEach((device, dv) => {
+        if (device && !dataExclude.value[ch][dv]) {
           subArray.push(callback(device));
         }
       });
@@ -124,6 +126,7 @@ async function openDataFile() {
       .then(data => {
         let chip: ChipData = JSON.parse(data as string);
         CHIPS.value = [chip];
+        dataExclude.value = [Array.from({length: chip.devices.length}, () => false)];
         updateMapping(MappingModeIndex.value)
       });
   }
@@ -141,6 +144,7 @@ async function openDataPath() {
       .then(data => {
         let chips: ChipData[] = JSON.parse(data as string);
         CHIPS.value = chips;
+        dataExclude.value = chips.map(chip => Array.from({length: chip.devices.length}, () => false));
         updateMapping(MappingModeIndex.value)
       });
   }
@@ -149,6 +153,22 @@ async function openDataPath() {
 const mappingColumn = ref(4);
 
 const showMappingInfo = ref(false);
+
+function excludeToggle(position: number[]) {
+  let ch = position[0];
+  let dv = position[1];
+  dataExclude.value[ch][dv] = !dataExclude.value[ch][dv];
+  updateMapping(MappingModeIndex.value);
+}
+
+function excludeAll(chipIndex: number) {
+  if(dataExclude.value[chipIndex].includes(true)) {
+    dataExclude.value[chipIndex] = Array.from({length: dataExclude.value[chipIndex].length}, () => false);
+  } else {
+    dataExclude.value[chipIndex] = [...dataStatus.value[chipIndex]];
+  }
+  updateMapping(MappingModeIndex.value);
+}
 </script>
 
 <template>
@@ -186,8 +206,18 @@ const showMappingInfo = ref(false);
       </div>
       <div id="chips-container"
         :style="{ gridTemplateColumns: `repeat(${Math.min(CHIPS.length, Math.max(1, mappingColumn))}, 4cm)` }">
-        <Chip v-for="(chip, index) in CHIPS" :name="chip.name" :devices="chip.devices" :status="dataStatus[index]"
-          :filterMode="MappingModeIndex" :filterMax="filterMax" :filterMin="filterMin" v-model="dataIndecies[index]" />
+        <Chip v-for="(chip, index) in CHIPS"
+        :name="chip.name"
+        :chipIndex="index"
+        :devices="chip.devices"
+        :status="dataStatus[index]"
+        :exclude="dataExclude[index]"
+        :filterMode="MappingModeIndex"
+        :filterMax="filterMax"
+        :filterMin="filterMin"
+        @exclude-toggle="excludeToggle"
+        @exclude-all="excludeAll"
+        v-model="dataIndecies[index]" />
       </div>
     </div>
     <DataViewer :data="dataShowing" />
