@@ -72,9 +72,10 @@ async function drawSpectra(chart: ECharts, devices: (DeviceData | null)[], uInde
     let series: {}[] = [];
   
     devices.forEach(device => {
-      spcMaxs.push(Math.max(...device!.spectra[uIndex]));
-  
-      let points3: number[][] = new Array();
+      if(device!.spectra.length > uIndex) {
+        spcMaxs.push(Math.max(...device!.spectra[uIndex]));
+    
+        let points3: number[][] = new Array();
         device!.spectra[uIndex].forEach((value, index) => {
           points3.push([device!.wavelength[index], value]);
         });
@@ -82,6 +83,7 @@ async function drawSpectra(chart: ECharts, devices: (DeviceData | null)[], uInde
           name: device!.name, type: 'line', data: points3,
           symbol: 'none',
         })
+      }
     })
   
     chart.setOption({
@@ -165,7 +167,6 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
       lMaxs.push(Math.max(...device!.luminance));
       eMins.push(Math.min(...device!.eqe));
       eMaxs.push(Math.max(...device!.eqe));
-      spcMaxs.push(Math.max(...device!.spectra[uIndex]));
 
       let points1_1: number[][] = new Array();
       let points1_2: number[][] = new Array();
@@ -193,14 +194,18 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
         symbolSize: 6,
       })
 
-      let points3: number[][] = new Array();
-      device!.spectra[uIndex].forEach((value, index) => {
-        points3.push([device!.wavelength[index], value]);
-      });
-      series3.push({
-        name: device!.name, type: 'line', data: points3,
-        symbol: 'none',
-      })
+      if(device!.spectra.length > uIndex) {
+        spcMaxs.push(Math.max(...device!.spectra[uIndex]));
+
+        let points3: number[][] = new Array();
+        device!.spectra[uIndex].forEach((value, index) => {
+          points3.push([device!.wavelength[index], value]);
+        });
+        series3.push({
+          name: device!.name, type: 'line', data: points3,
+          symbol: 'none',
+        })
+      }
     })
     
     chart1.setOption({

@@ -48,6 +48,22 @@ impl DeviceData {
             leak_j: 0.0,
         }
     }
+    fn remove_invalid_voltage(&mut self) {
+        let voltage_index_until = self.u.iter().enumerate().position(|(i, v)| {
+            if i == 0 {
+                return false
+            } else {
+                return v <= &self.u[i - 1]
+            }
+        });
+        if let Some(until) = voltage_index_until {
+            self.u.drain(until..);
+            self.j.drain(until..);
+            self.luminance.drain(until..);
+            self.eqe.drain(until..);
+            self.spectra.drain(until..);
+        }
+    }
     fn calc_summary_data(&mut self) {
         self.max_lumi = self
             .luminance
@@ -63,11 +79,7 @@ impl DeviceData {
             .iter()
             .position(|l| *l >= self.max_lumi * 0.1)
             .unwrap();
-        let leak_index_until = self
-            .luminance
-            .iter()
-            .position(|l| *l > 0.0)
-            .unwrap();
+        let leak_index_until = self.luminance.iter().position(|l| *l > 0.0).unwrap();
 
         self.valid_eqe = self.eqe[valid_index_from..]
             .to_vec()
@@ -124,14 +136,14 @@ where
                 .par_iter()
                 .zip(devices.par_iter_mut())
                 .for_each(|(col, device)| {
-                    let lumi = row[*col + 3].as_f64().unwrap().max(0.0);
+                    let lumi = row[*col + 3].as_f64().unwrap_or(0.0).max(0.0);
                     let eqe = if lumi > 0.0 {
-                        row[*col + 4].as_f64().unwrap().max(0.0)
+                        row[*col + 4].as_f64().unwrap_or(0.0).max(0.0)
                     } else {
                         0.0
                     };
-                    device.u[index] = row[*col].as_f64().unwrap();
-                    device.j[index] = row[*col + 2].as_f64().unwrap().max(0.0);
+                    device.u[index] = row[*col].as_f64().unwrap_or(0.0);
+                    device.j[index] = row[*col + 2].as_f64().unwrap_or(0.0).max(0.0);
                     device.luminance[index] = lumi;
                     device.eqe[index] = eqe;
                 });
@@ -140,14 +152,14 @@ where
                 .par_iter()
                 .zip(devices.par_iter_mut())
                 .for_each(|(col, device)| {
-                    let radi = row[*col + 6].as_f64().unwrap().max(0.0);
+                    let radi = row[*col + 6].as_f64().unwrap_or(0.0).max(0.0);
                     let eqe = if radi > 0.0 {
-                        row[*col + 5].as_f64().unwrap().max(0.0)
+                        row[*col + 5].as_f64().unwrap_or(0.0).max(0.0)
                     } else {
                         0.0
                     };
-                    device.u[index] = row[*col].as_f64().unwrap();
-                    device.j[index] = row[*col + 7].as_f64().unwrap().max(0.0);
+                    device.u[index] = row[*col].as_f64().unwrap_or(0.0);
+                    device.j[index] = row[*col + 7].as_f64().unwrap_or(0.0).max(0.0);
                     device.luminance[index] = radi;
                     device.eqe[index] = eqe;
                 });
@@ -156,10 +168,11 @@ where
 
     let mut devices_filtered: Vec<Option<DeviceData>> = devices
         .into_par_iter()
-        .map(|device| {
+        .map(|mut device| {
             if is_empty_data(&device) {
                 None
             } else {
+                device.remove_invalid_voltage();
                 Some(device)
             }
         })
@@ -178,13 +191,13 @@ where
                     .into_iter()
                     .enumerate()
                     .for_each(|(index, data)| {
-                        device.wavelength[index] = data[0].as_f64().unwrap();
+                        device.wavelength[index] = data[0].as_f64().unwrap_or(0.0);
                         device
                             .spectra
                             .par_iter_mut()
                             .zip(data.par_iter().skip(1))
                             .for_each(|(spc, d)| {
-                                spc[index] = d.as_f64().unwrap();
+                                spc[index] = d.as_f64().unwrap_or(0.0);
                             });
                     })
             }
