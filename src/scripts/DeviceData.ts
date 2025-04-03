@@ -150,8 +150,8 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
     let series2: {}[] = [];
     let series3: {}[] = [];
     let isVis = devices[0]!.is_vis;
-    let uMin = devices[0]!.u[0];
-    let uMax = devices[0]!.u[devices[0]!.u.length - 1];
+    let longestULength = 0;
+    let longestUIndex = 0;
     let wMin = devices[0]!.wavelength[0];
     let wMax = devices[0]!.wavelength[devices[0]!.wavelength.length - 1];
     let jMins: number[] = [];
@@ -161,7 +161,12 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
     let eMaxs: number[] = [];
     let spcMaxs: number[] = [];
 
-    devices.forEach(device => {
+    devices.forEach((device, index) => {
+      if(device!.u.length > longestULength) {
+        longestULength = device!.u.length;
+        longestUIndex = index;
+      }
+
       jMins.push(Math.min(...device!.j));
       jMaxs.push(Math.max(...device!.j));
       lMaxs.push(Math.max(...device!.luminance));
@@ -207,6 +212,9 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
         })
       }
     })
+
+    let uMin = devices[longestUIndex]!.u[0];
+    let uMax = devices[longestUIndex]!.u[longestULength - 1];
     
     chart1.setOption({
       animation: false,
