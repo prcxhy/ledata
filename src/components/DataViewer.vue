@@ -20,11 +20,19 @@ let plot2 = useTemplateRef('eqe-luminance');
 let plot3 = useTemplateRef('spectra');
 
 const uLength = ref(1);
-
+const indexOfLongestU = ref(0);
 const uIndex = ref(0);
 
 watch(() => prop.data, newData => {
-    uLength.value = newData[0]? newData[0].u.length: 1;
+    uLength.value = 1;
+    indexOfLongestU.value = 0;
+    uIndex.value = 0;
+    newData.forEach((device, index) => {
+        if(device!.u.length > uLength.value) {
+            uLength.value = device!.u.length;
+            indexOfLongestU.value = index;
+        }
+    })
     if(chart1) {
         chart1.dispose();
     }
@@ -60,19 +68,19 @@ function copyPerformance() {
     if(prop.data.length > 0) {
         let row0 = 'U';
         let row1 = 'V';
-        let row2 = prop.data[0]!.name;
+        let row2 = '';
         for(var i = 0; i < prop.data.length; i ++) {
             row0 += prop.data[i]!.is_vis? '\tJ\tLuminance\tEQE': '\tJ\tRadiance\tEQE';
             row1 += prop.data[i]!.is_vis? '\tmA/cm2\tcd/cm2\t%': '\tmA/cm2\tW/sr/m²\t%';
             row2 += `\t${prop.data[i]!.name}\t${prop.data[i]!.name}\t${prop.data[i]!.name}`;
         }
         let str = `${row0}\n${row1}\n${row2}\n`;
-        prop.data[0]!.u.forEach((uVal, index) => {
+        prop.data[indexOfLongestU.value]!.u.forEach((uVal, index) => {
             let row = prop.data.map(d => {
-                if(d) {
+                if(d && d.u.length > index) {
                     return [d.j[index], d.luminance[index], d.eqe[index]]
                 } else {
-                    return []
+                    return ['','','']
                 }
             }).flat();
             row.splice(0, 0, uVal);
@@ -87,15 +95,18 @@ function copySpectra() {
     if(prop.data.length > 0) {
         let row0 = 'Wavelength';
         let row1 = 'nm';
-        let row2 = prop.data[0]!.name;
+        let row2 = '';
         for(var i = 0; i < prop.data.length; i ++) {
+            if(prop.data[i]!.u.length <= uIndex.value) {
+                continue;
+            }
             row0 +='\tIntensity';
             row2 +=`\t${prop.data[i]!.name}`;
         }
         let str = `${row0}\n${row1}\n${row2}\n`;
         prop.data[0]!.wavelength.forEach((lambda, index) => {
             let row = prop.data.map(d => {
-                if(d) {
+                if(d && d.u.length > uIndex.value) {
                     return [d.spectra[uIndex.value][index]]
                 } else {
                     return []
@@ -142,7 +153,7 @@ function saveImage() {
                 <div ref="spectra" class="plot"></div>
                 <div id="votage-slide">
                     <input type="range" min="0" :max="uLength - 1" v-model.number="uIndex">
-                    <p>{{ `${prop.data[0]? prop.data[0].u[uIndex].toFixed(1): 0.0} V` }}</p>
+                    <p>{{ `${prop.data[indexOfLongestU]? prop.data[indexOfLongestU]!.u[uIndex].toFixed(1): 0.0} V` }}</p>
                 </div>
             </div>
         </div>
