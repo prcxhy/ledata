@@ -22,6 +22,7 @@ let plot3 = useTemplateRef('spectra');
 const uLength = ref(1);
 const indexOfLongestU = ref(0);
 const uIndex = ref(0);
+const logXAxis = ref(false);
 
 watch(() => prop.data, newData => {
     uLength.value = 1;
@@ -46,7 +47,7 @@ watch(() => prop.data, newData => {
         chart1 = echarts.init(plot1.value! as HTMLDivElement);
         chart2 = echarts.init(plot2.value! as HTMLDivElement);
         chart3 = echarts.init(plot3.value! as HTMLDivElement);
-        drawChart(chart1, chart2, chart3, newData, uIndex.value);
+        drawChart(chart1, chart2, chart3, newData, uIndex.value, logXAxis.value);
         // let result = SIMU_RESULT.value[newIndex];
         // drawChart(chart, result, indexAtExtraAxis.value);
     })
@@ -62,6 +63,21 @@ watch(uIndex, newIndex => {
         // let result = SIMU_RESULT.value[newIndex];
         // drawChart(chart, result, indexAtExtraAxis.value);
     })
+});
+
+watch(logXAxis, newVal => {
+    let xAxisOption = (chart2.getOption().xAxis as {[key: string]: any}[])[0];
+    if(newVal) {
+        xAxisOption.type = 'log';
+        chart2.setOption({
+            xAxis: xAxisOption
+        })
+    } else {
+        xAxisOption.type = 'value';
+        chart2.setOption({
+            xAxis: xAxisOption
+        })
+    }
 })
 
 function copyPerformance() {
@@ -147,9 +163,20 @@ function saveImage() {
 <template>
     <div id="data-viewer">
         <div id="plots-container">
-            <div ref="luminance-j-v" class="plot"></div>
-            <div ref="eqe-luminance" class="plot"></div>
-            <div class="plot">
+            <div class="plot-card">
+                <div ref="luminance-j-v" class="plot"></div>
+            </div>
+            <div class="plot-card">
+                <div ref="eqe-luminance" class="plot"></div>
+                <div id="x-axis-mode">
+                    <p>横轴模式</p>
+                    <div id="x-axis-mode-switch">
+                        <p :class="['filter-option', !logXAxis? 'option-selected': '']" @click="logXAxis = false">线性</p>
+                        <p :class="['filter-option', logXAxis? 'option-selected': ''] " @click="logXAxis = true">对数</p>
+                    </div>
+                </div>
+            </div>
+            <div class="plot-card">
                 <div ref="spectra" class="plot"></div>
                 <div id="votage-slide">
                     <input type="range" min="0" :max="uLength - 1" v-model.number="uIndex">

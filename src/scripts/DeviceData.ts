@@ -144,7 +144,9 @@ async function drawSpectra(chart: ECharts, devices: (DeviceData | null)[], uInde
   }
 }
 
-async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devices: (DeviceData | null)[], uIndex: number) {
+async function drawChart(
+  chart1: ECharts, chart2: ECharts, chart3: ECharts,
+  devices: (DeviceData | null)[], uIndex: number, logMode: boolean) {
   if(devices.length > 0 && !devices.includes(null)) {
     let series1: {}[] = [];
     let series2: {}[] = [];
@@ -313,7 +315,7 @@ async function drawChart(chart1: ECharts, chart2: ECharts, chart3: ECharts, devi
         top: 24, bottom: 48, right: 24, left: 60
       },
       xAxis: {
-        type: 'value', nameLocation: 'center', nameGap: 24,
+        type: logMode? 'log': 'value', nameLocation: 'center', nameGap: 24,
         name: isVis? "Luminance (cd/cm²)": "Radiance (W/sr/m²)", nameTextStyle: {
           color: fontGridColor, fontFamily: 'Times New Roman'
         },
