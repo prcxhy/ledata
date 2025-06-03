@@ -272,7 +272,7 @@ async function drawChart(
         splitLine: { show: false },
       }, {
         type: 'log', nameLocation: 'center', nameGap: 48,
-        name: isVis? "Luminance (cd/cm²)": "Radiance (W/sr/m²)", nameTextStyle: {
+        name: isVis? "Luminance (cd/m²)": "Radiance (W/sr/m²)", nameTextStyle: {
           color: fontGridColor, fontFamily: 'Times New Roman'
         },
         min: isVis? 1: 1e-3, max: getRangeMax(lMaxs, 6),
@@ -294,7 +294,7 @@ async function drawChart(
       tooltip: {
         trigger: 'item', padding: [0, 4],
         formatter: (params: { [key: string]: any }) => {
-          let radianceUnit = isVis? "cd/cm²": "W/sr/m²";
+          let radianceUnit = isVis? "cd/m²": "W/sr/m²";
           return `${(params.value[0] as number).toFixed(2)} ${radianceUnit}<br/>${(params.value[1] as number).toFixed(3)} %`;
         },
         textStyle: { fontSize: 12 }
@@ -316,7 +316,7 @@ async function drawChart(
       },
       xAxis: {
         type: logMode? 'log': 'value', nameLocation: 'center', nameGap: 24,
-        name: isVis? "Luminance (cd/cm²)": "Radiance (W/sr/m²)", nameTextStyle: {
+        name: isVis? "Luminance (cd/m²)": "Radiance (W/sr/m²)", nameTextStyle: {
           color: fontGridColor, fontFamily: 'Times New Roman'
         },
         min: isVis? 1: 1e-3,
