@@ -137,22 +137,31 @@ function copySpectra() {
 }
 
 function saveImage() {
-    let canvas1 = (plot1.value!.children[0].children[0] as HTMLCanvasElement);
-    let url1 = canvas1.toDataURL('image/png');
+    let url1 = chart1.getDataURL({
+        type: 'png',
+        pixelRatio: 4,
+        backgroundColor: '#fff'
+    });
     let link1 = document.createElement('a');
     link1.href = url1;
     link1.download = prop.data[0]!.is_vis? 'J/Luminance-V.png': 'J/Radiance-V.png';
     link1.click();
 
-    let canvas2 = (plot2.value!.children[0].children[0] as HTMLCanvasElement);
-    let url2 = canvas2.toDataURL('image/png');
+    let url2 = chart2.getDataURL({
+        type: 'png',
+        pixelRatio: 4,
+        backgroundColor: '#fff'
+    });
     let link2 = document.createElement('a');
     link2.href = url2;
     link2.download = prop.data[0]!.is_vis? 'EQE-Luminance.png': 'EQE-Radiance.png';
     link2.click();
 
-    let canvas3 = (plot3.value!.children[0].children[0] as HTMLCanvasElement);
-    let url3 = canvas3.toDataURL('image/png');
+    let url3 = chart3.getDataURL({
+        type: 'png',
+        pixelRatio: 4,
+        backgroundColor: '#fff'
+    });
     let link3 = document.createElement('a');
     link3.href = url3;
     link3.download = 'Spectra.png';
