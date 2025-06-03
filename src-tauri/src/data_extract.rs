@@ -53,6 +53,7 @@ impl DeviceData {
             if i == 0 {
                 return false
             } else {
+                // 电压波动会被误判
                 return v <= &self.u[i - 1]
             }
         });

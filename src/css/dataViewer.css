@@ -312,13 +312,17 @@ button:active {
 #plots-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, 122mm);
-    grid-template-rows: repeat(auto-fill, auto);
+    grid-auto-rows: auto;
     border-radius: 2mm;
     gap: 3mm;
     justify-content: space-evenly;
     align-content: space-evenly;
     padding-bottom: 3mm;
     overflow: auto;
+}
+
+#plots-container > :first-child {
+    margin-top: 0px;
 }
 
 #plots-tools {
