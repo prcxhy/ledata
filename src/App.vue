@@ -2,6 +2,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { computed, Ref, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import DataViewer from './components/DataViewer.vue';
 import Chip from "./components/Chip.vue";
 import { Chip as ChipData, DeviceData } from "./scripts/DeviceData";
@@ -10,11 +11,26 @@ import IconExcel from "./assets/excel.svg?component";
 import IconHelp from "./assets/help.svg?component";
 import IconArrow from "./assets/down.svg?component";
 
+const appWebview = getCurrentWebviewWindow();
+
 const workingPath = ref("");
 
 const dataIndecies: Ref<number[][]> = ref([]);
 
 const CHIPS: Ref<(ChipData)[]> = ref([new ChipData('', [])]);
+
+const messageText = ref('');
+const messageType = ref('ok')
+
+function showMessage(text: string, type: 'ok' | 'error') {
+  messageText.value = text;
+  messageType.value = type;
+  setTimeout(() => messageText.value = '', 3000);
+}
+
+appWebview.listen<string>('fail-to-open', (event) => {
+  showMessage(event.payload, 'error');
+});
 
 const dataShowing = computed(() => {
   let dataArray = dataIndecies.value.map((array, index) => {
@@ -128,6 +144,8 @@ async function openDataFile() {
         CHIPS.value = [chip];
         dataExclude.value = [Array.from({length: chip.devices.length}, () => false)];
         updateMapping(MappingModeIndex.value)
+      }).catch(msg => {
+        showMessage(msg, 'error');
       });
   }
 }
@@ -146,6 +164,8 @@ async function openDataPath() {
         CHIPS.value = chips;
         dataExclude.value = chips.map(chip => Array.from({length: chip.devices.length}, () => false));
         updateMapping(MappingModeIndex.value)
+      }).catch(msg => {
+        showMessage(msg, 'error');
       });
   }
 }
@@ -172,6 +192,13 @@ function excludeAll(chipIndex: number) {
 </script>
 
 <template>
+  <Teleport to="body">
+    <Transition name="message">
+      <p ref="message" v-if="messageText != ''" :class="['message', messageType]">
+        <span v-html="messageText"></span>
+      </p>
+    </Transition>
+  </Teleport>
   <nav>
     <button @click="openDataFile">
       <IconExcel />打开文件
@@ -220,6 +247,56 @@ function excludeAll(chipIndex: number) {
         v-model="dataIndecies[index]" />
       </div>
     </div>
-    <DataViewer :data="dataShowing" />
+    <DataViewer :data="dataShowing" @message="showMessage"/>
   </div>
 </template>
+
+<style>
+.message {
+  background-color: rgba(250, 250, 250, 0.7);
+  position: relative;
+  padding: 2mm 3mm 2mm 2mm;
+  border-radius: 2mm;
+  top: 2mm;
+  font-size: 3.6mm;
+  margin: 0px auto;
+  justify-self: center;
+  z-index: 2;
+  filter: drop-shadow(0px 0px 8px rgba(0, 0, 0, 0.1));
+  overflow: hidden;
+  user-select: none;
+  backdrop-filter: blur(4px);
+}
+
+.ok {
+  border: 2px solid rgba(59, 209, 39, 0.2);
+}
+
+.ok::before {
+  content: '●';
+  color: rgba(59, 209, 39, 0.5);
+  margin-right: 2mm;
+}
+
+.error {
+  border: 2px solid rgba(255, 88, 88, 0.2);
+}
+
+.error::before {
+  content: '×';
+  font-weight: bold;
+  color: rgb(255, 88, 88);
+  margin-right: 2mm;
+}
+
+.message-enter-active,
+.message-leave-active {
+  transition: all 0.3s ease;
+}
+
+.message-enter-from,
+.message-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+</style>
