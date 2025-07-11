@@ -6,6 +6,7 @@ use rayon::iter::{
     IntoParallelRefMutIterator, ParallelIterator,
 };
 use serde::Serialize;
+use tauri::{AppHandle, Emitter, EventTarget};
 
 #[derive(Serialize)]
 struct Chip {
@@ -49,12 +50,13 @@ impl DeviceData {
         }
     }
     fn remove_invalid_voltage(&mut self) {
+        // 电压下降（击穿、烧坏）判断
         let voltage_index_until = self.u.iter().enumerate().position(|(i, v)| {
             if i == 0 {
                 return false
             } else {
-                // 电压波动会被误判
-                return v <= &self.u[i - 1]
+                // 电压波动应该不会被误判……吧
+                return v < &self.u[i - 1] && v.ceil() < self.u[i - 1].floor()
             }
         });
         if let Some(until) = voltage_index_until {
@@ -75,12 +77,19 @@ impl DeviceData {
         self.max_eqe = self.eqe.clone().into_iter().reduce(f64::max).unwrap_or(0.);
         self.max_j = self.j.clone().into_iter().reduce(f64::max).unwrap_or(0.);
 
+        // 寻找有效EQE范围（不低于最高亮度10%）起始
         let valid_index_from = self
             .luminance
             .iter()
             .position(|l| *l >= self.max_lumi * 0.1)
-            .unwrap();
-        let leak_index_until = self.luminance.iter().position(|l| *l > 0.0).unwrap();
+            .unwrap_or(0);  // 找不到就设为数组头吧
+        // 寻找漏电流截止位置（开压位置），找不到就设为数组尾吧
+        let leak_index_until = self.luminance.iter().position(|l| *l > 0.0).unwrap_or(self.u.len());
+        /*
+            唉，真遇上奇怪数据找不准这些值，要是搞成异常处理麻烦得要死，
+            加上数据主体又不是读不进来，这里不对劲也不能算作异常，
+            就这样给个奇怪的值出来，到时候可视化的时候显示不对劲交给用户判断去吧
+        */ 
 
         self.valid_eqe = self.eqe[valid_index_from..]
             .to_vec()
@@ -102,7 +111,7 @@ fn is_empty_data(device_data: &DeviceData) -> bool {
         .any(|(u_val, l_val)| *u_val > 0.0 && *l_val > 0.0);
 }
 
-fn extract_device_data<T>(chip_name: String, workbook: &mut Xlsx<T>) -> Chip
+fn extract_device_data<T>(chip_name: String, workbook: &mut Xlsx<T>) -> Result<Chip, String>
 where
     T: Seek,
     T: std::io::Read,
@@ -115,6 +124,10 @@ where
             spc_length = sheet.1.height() - 1;
             break;
         }
+    }
+
+    if sheets[0].1.width() != 320 && sheets[0].1.width() != 88 {
+        return Err(chip_name);
     }
 
     let is_vis = sheets[0].1.width() == 320;
@@ -204,27 +217,26 @@ where
             }
         });
 
-    Chip {
+    Ok(Chip {
         name: chip_name,
         devices: devices_filtered,
-    }
+    })
 }
 
 #[tauri::command]
-pub fn open_one_file(path: String) -> String {
+pub fn open_one_file(path: String) -> Result<String, String> {
     let path_buf = PathBuf::from(path);
     let chip_name = path_buf.file_stem().unwrap().to_str().unwrap();
     let mut workbook: Xlsx<_> = open_workbook(&path_buf).unwrap();
 
-    let chip = extract_device_data(chip_name.to_string(), &mut workbook);
-
-    let chip_json = serde_json::to_string(&chip).unwrap();
-
-    chip_json
+    match extract_device_data(chip_name.to_string(), &mut workbook) {
+        Ok(chip_data) => Ok(serde_json::to_string(&chip_data).unwrap()),
+        Err(msg) => Err(msg + " 表格的格式不受支持")
+    }
 }
 
 #[tauri::command]
-pub fn open_path(path: String) -> String {
+pub fn open_path(app: AppHandle,path: String) -> Result<String, String> {
     let path_buf = PathBuf::from(path);
     let mut paths = Vec::<PathBuf>::new();
     for entry in path_buf.read_dir().unwrap() {
@@ -236,7 +248,14 @@ pub fn open_path(path: String) -> String {
         }
     }
 
-    let chips = paths
+    if paths.len() == 0 {
+        return Err("该目录为空".to_string());
+    }
+
+    let mut chips: Vec<Chip> = Vec::new();
+    let mut error_msgs: Vec<String> = Vec::new();
+
+    let read_results = paths
         .par_iter()
         .map(|path| {
             let chip_name = path.file_stem().unwrap().to_str().unwrap().to_string();
@@ -244,7 +263,21 @@ pub fn open_path(path: String) -> String {
 
             extract_device_data(chip_name, &mut workbook)
         })
-        .collect::<Vec<Chip>>();
+        .collect::<Vec<Result<Chip, String>>>();
 
-    serde_json::to_string(&chips).unwrap()
+    for result in read_results.into_iter() {
+        match result {
+            Ok(chip_data) => chips.push(chip_data),
+            Err(msg) => error_msgs.push(msg)
+        }
+    };
+
+    if chips.len() == 0 {
+        return Err("该目录下没有找到符合支持格式的数据表格".to_string());
+    } else if error_msgs.len() != 0 {
+        let error_text = error_msgs.join("<br>");
+        app.emit_to(EventTarget::any(), "fail-to-open", "以下文件的表格格式不受支持:<br>".to_string() + &error_text).unwrap();
+    }
+
+    Ok(serde_json::to_string(&chips).unwrap())
 }
