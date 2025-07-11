@@ -274,7 +274,7 @@ pub fn open_path(app: AppHandle,path: String) -> Result<String, String> {
 
     if chips.len() == 0 {
         return Err("该目录下没有找到符合支持格式的数据表格".to_string());
-    } else {
+    } else if error_msgs.len() != 0 {
         let error_text = error_msgs.join("<br>");
         app.emit_to(EventTarget::any(), "fail-to-open", "以下文件的表格格式不受支持:<br>".to_string() + &error_text).unwrap();
     }
