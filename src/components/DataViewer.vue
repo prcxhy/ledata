@@ -4,7 +4,7 @@ import { nextTick, ref, useTemplateRef, watch } from 'vue';
 import { DeviceData, drawChart, drawSpectra } from '../scripts/DeviceData';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import IconCopy from '../assets/clipboard.svg?component';
-import IconExport from '../assets/export.svg?component';
+import IconExport from '../assets/down-picture.svg?component';
 
 const prop = defineProps<{
     data: (DeviceData | null)[]
@@ -197,7 +197,7 @@ function saveImage() {
                 </div>
             </div>
         </div>
-        <div id="plots-tools">
+        <div v-show="prop.data.length > 0" id="plots-tools">
             <button @click="copyPerformance"><IconCopy />复制性能数据</button>
             <button @click="copySpectra"><IconCopy />复制光谱数据</button>
             <button @click="saveImage"><IconExport />导出图片</button>
