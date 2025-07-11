@@ -10,7 +10,6 @@ const prop = defineProps<{
     data: (DeviceData | null)[]
 }>();
 
-
 var chart1: echarts.ECharts;
 var chart2: echarts.ECharts;
 var chart3: echarts.ECharts;
@@ -80,6 +79,8 @@ watch(logXAxis, newVal => {
     }
 })
 
+const emit = defineEmits(["message"]);
+
 function copyPerformance() {
     if(prop.data.length > 0) {
         let row0 = 'U';
@@ -104,6 +105,7 @@ function copyPerformance() {
             str += rowString;
         })
         writeText(str);
+        emit("message", "已将性能数据复制到剪贴板，可在Origin直接粘贴", "ok");
     }
 }
 
@@ -133,6 +135,7 @@ function copySpectra() {
             str += rowString;
         })
         writeText(str);
+        emit("message", "已将当前光谱数据复制到剪贴板，可在Origin直接粘贴", "ok");
     }
 }
 
@@ -166,6 +169,7 @@ function saveImage() {
     link3.href = url3;
     link3.download = 'Spectra.png';
     link3.click();
+    emit("message", "图片已导出", "ok");
 }
 </script>
 
