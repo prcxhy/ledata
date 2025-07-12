@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
-import { computed, Ref, ref, watch } from "vue";
+import { computed, nextTick, Ref, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import DataViewer from './components/DataViewer.vue';
@@ -82,6 +82,9 @@ const MappingModeInfo = [
   "提取每个器件的\"漏电流\"的平均值进行mapping, 漏电流越小则颜色越暗。 但由于代码实现上较难判断开压, 故漏电流选取⚠️可能不准⚠️, 此mapping仅供参考"
 ];
 
+const selectionBoxWidth = ref(0);
+const selectionBoxLeft = ref(0);
+
 const MappingModeIndex = ref(0);
 
 const filterMax = ref(0);
@@ -125,7 +128,12 @@ function updateMapping(newIndex: number) {
 
 watch(MappingModeIndex, newIndex => {
   updateMapping(newIndex);
-})
+  nextTick(() => {
+    let optionSelected = (document.getElementById('filter-slot') as HTMLDivElement).children[newIndex];
+    selectionBoxWidth.value = (optionSelected as HTMLParagraphElement).clientWidth;
+    selectionBoxLeft.value = (optionSelected as HTMLParagraphElement).offsetLeft;
+  })
+}, {immediate: true});
 
 async function openDataFile() {
   let filePath = await open({
@@ -193,7 +201,7 @@ function excludeAll(chipIndex: number) {
 
 <template>
   <Teleport to="body">
-    <Transition name="message">
+    <Transition>
       <p ref="message" v-if="messageText != ''" :class="['message', messageType]">
         <span v-html="messageText"></span>
       </p>
@@ -208,7 +216,7 @@ function excludeAll(chipIndex: number) {
     </button>
     <p>{{ workingPath }}</p>
   </nav>
-  <div id="content" :style="{ gridTemplateColumns: dataShowing.length > 0 ? '1fr auto' : '1fr 5mm' }">
+  <div id="content" :style="{ right: dataShowing.length > 0 ? '0px' : '-127mm' }">
     <div id="selector">
       <div id="performance-mapping">
         <h1>{{ `器件性能Mapping | ${filterMode[MappingModeIndex]}` }}</h1>
@@ -216,10 +224,11 @@ function excludeAll(chipIndex: number) {
           <IconHelp v-if="!showMappingInfo" />
           <IconArrow v-if="showMappingInfo" />
         </button>
-        <p v-if="showMappingInfo" id="mapping-mode-info">
-          <!-- {{ MappingModeInfo[MappingModeIndex] + "。😘当mapping颜色没有正常显示/自动刷新时, 手动切换一下mapping模式即可恢复正常😘" }} -->
-          {{ MappingModeInfo[MappingModeIndex] }}
-        </p>
+        <Transition>
+          <p v-if="showMappingInfo" id="mapping-mode-info">
+            {{ MappingModeInfo[MappingModeIndex] }}
+          </p>
+        </Transition>
         <div id="filter-slot">
           <p v-for="(modeName, index) in filterMode" @click="MappingModeIndex = index" :class="[
             'filter-option',
@@ -227,31 +236,30 @@ function excludeAll(chipIndex: number) {
           ]">
             {{ modeName }}
           </p>
+          <div ref="selection-box" id="selection-box"
+            :style="{ left: selectionBoxLeft + 'px', width: selectionBoxWidth + 'px' }"></div>
           <label for="mapping-column">{{ "列数" }}</label>
           <input id="mapping-column" type="text" v-model.number="mappingColumn">
         </div>
       </div>
       <div id="chips-container"
         :style="{ gridTemplateColumns: `repeat(${Math.min(CHIPS.length, Math.max(1, mappingColumn))}, 4cm)` }">
-        <Chip v-for="(chip, index) in CHIPS"
-        :name="chip.name"
-        :chipIndex="index"
-        :devices="chip.devices"
-        :status="dataStatus[index]"
-        :exclude="dataExclude[index]"
-        :filterMode="MappingModeIndex"
-        :filterMax="filterMax"
-        :filterMin="filterMin"
-        @exclude-toggle="excludeToggle"
-        @exclude-all="excludeAll"
-        v-model="dataIndecies[index]" />
+        <Chip v-for="(chip, index) in CHIPS" :name="chip.name" :chipIndex="index" :devices="chip.devices"
+          :status="dataStatus[index]" :exclude="dataExclude[index]" :filterMode="MappingModeIndex"
+          :filterMax="filterMax" :filterMin="filterMin" @exclude-toggle="excludeToggle" @exclude-all="excludeAll"
+          v-model="dataIndecies[index]" />
       </div>
     </div>
-    <DataViewer :data="dataShowing" @message="showMessage"/>
+    <DataViewer :data="dataShowing" @message="showMessage" />
   </div>
 </template>
 
 <style>
+nav > button {
+  border-radius: 1mm;
+  padding-left: 1.5mm;
+}
+
 .message {
   background-color: rgba(250, 250, 250, 0.7);
   position: relative;
@@ -289,13 +297,22 @@ function excludeAll(chipIndex: number) {
   margin-right: 2mm;
 }
 
-.message-enter-active,
-.message-leave-active {
+#selection-box {
+  position: absolute;
+  background-color: rgb(250, 250, 250);
+  border: 1px solid white;
+  height: 8mm;
+  border-radius: 1mm;
+  transition: 0.15s;
+}
+
+.v-enter-active,
+.v-leave-active {
   transition: all 0.3s ease;
 }
 
-.message-enter-from,
-.message-leave-to {
+.v-enter-from,
+.v-leave-to {
   opacity: 0;
   transform: translateY(-10px);
 }

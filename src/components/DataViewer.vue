@@ -186,6 +186,7 @@ function saveImage() {
                     <div id="x-axis-mode-switch">
                         <p :class="['filter-option', !logXAxis? 'option-selected': '']" @click="logXAxis = false">线性</p>
                         <p :class="['filter-option', logXAxis? 'option-selected': ''] " @click="logXAxis = true">对数</p>
+                        <div id="switch-thumb" :style="{ left: logXAxis ? '50%' : '1mm' }"></div>
                     </div>
                 </div>
             </div>
@@ -197,10 +198,40 @@ function saveImage() {
                 </div>
             </div>
         </div>
-        <div v-show="prop.data.length > 0" id="plots-tools">
-            <button @click="copyPerformance"><IconCopy />复制性能数据</button>
-            <button @click="copySpectra"><IconCopy />复制光谱数据</button>
-            <button @click="saveImage"><IconExport />导出图片</button>
-        </div>
+        <Transition name="tools">
+            <div v-show="prop.data.length > 0" id="plots-tools">
+                <button @click="copyPerformance"><IconCopy />复制性能数据</button>
+                <button @click="copySpectra"><IconCopy />复制光谱数据</button>
+                <button @click="saveImage"><IconExport />导出图片</button>
+            </div>
+        </Transition>
     </div>
 </template>
+
+<style>
+#plots-tools > button {
+    border-radius: 3mm;
+    padding: 0px 2mm;
+}
+
+#switch-thumb {
+  position: absolute;
+  background-color: rgb(250, 250, 250);
+  border: 1px solid white;
+  height: 8mm;
+  width: calc(50% - 1mm - 2px);
+  border-radius: 1mm;
+  transition: 0.15s;
+  z-index: 1;
+}
+
+.tools-enter-active {
+    transition: all 0.3s ease 0.1s;
+}
+
+.tools-enter-from,
+.tools-leave-to {
+    opacity: 0;
+    transform: translateY(10px);
+}
+</style>
