@@ -385,7 +385,7 @@ button:active {
     transition: 0.3s;
 }
 
-#votage-slide, #x-axis-mode {
+#votage-slide, #axis-mode {
     display: flex;
     gap: 2mm;
     justify-content: center;
@@ -395,7 +395,7 @@ button:active {
     user-select: none;
 }
 
-#x-axis-mode-switch {
+.axis-mode-switch {
     position: relative;
     background-color: rgb(223, 223, 223);
     display: flex;

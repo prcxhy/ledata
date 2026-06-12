@@ -22,6 +22,7 @@ const uLength = ref(1);
 const indexOfLongestU = ref(0);
 const uIndex = ref(0);
 const logXAxis = ref(false);
+const logYAxis = ref(false);
 
 watch(() => prop.data, newData => {
     uLength.value = 1;
@@ -75,6 +76,21 @@ watch(logXAxis, newVal => {
         xAxisOption.type = 'value';
         chart2.setOption({
             xAxis: xAxisOption
+        })
+    }
+})
+
+watch(logYAxis, newVal => {
+    let yAxisOption = (chart2.getOption().yAxis as {[key: string]: any}[])[0];
+    if(newVal) {
+        yAxisOption.type = 'log';
+        chart2.setOption({
+            yAxis: yAxisOption
+        })
+    } else {
+        yAxisOption.type = 'value';
+        chart2.setOption({
+            yAxis: yAxisOption
         })
     }
 })
@@ -181,12 +197,18 @@ function saveImage() {
             </div>
             <div class="plot-card">
                 <div ref="eqe-luminance" class="plot"></div>
-                <div id="x-axis-mode">
+                <div id="axis-mode">
+                    <p>纵轴模式</p>
+                    <div class="axis-mode-switch">
+                        <p :class="['filter-option', !logYAxis? 'option-selected': '']" @click="logYAxis = false">线性</p>
+                        <p :class="['filter-option', logYAxis? 'option-selected': ''] " @click="logYAxis = true">对数</p>
+                        <div class="switch-thumb" :style="{ left: logYAxis ? '50%' : '1mm' }"></div>
+                    </div>
                     <p>横轴模式</p>
-                    <div id="x-axis-mode-switch">
+                    <div class="axis-mode-switch">
                         <p :class="['filter-option', !logXAxis? 'option-selected': '']" @click="logXAxis = false">线性</p>
                         <p :class="['filter-option', logXAxis? 'option-selected': ''] " @click="logXAxis = true">对数</p>
-                        <div id="switch-thumb" :style="{ left: logXAxis ? '50%' : '1mm' }"></div>
+                        <div class="switch-thumb" :style="{ left: logXAxis ? '50%' : '1mm' }"></div>
                     </div>
                 </div>
             </div>
@@ -214,7 +236,7 @@ function saveImage() {
     padding: 0px 2mm;
 }
 
-#switch-thumb {
+.switch-thumb {
   position: absolute;
   background-color: rgb(250, 250, 250);
   border: 1px solid white;
