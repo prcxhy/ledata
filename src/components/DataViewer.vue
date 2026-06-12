@@ -194,7 +194,7 @@ function saveImage() {
                 <div ref="spectra" class="plot"></div>
                 <div id="votage-slide">
                     <input type="range" min="0" :max="uLength - 1" v-model.number="uIndex">
-                    <p>{{ `${prop.data[indexOfLongestU]? prop.data[indexOfLongestU]!.u[uIndex].toFixed(1): 0.0} V` }}</p>
+                    <p>{{ `${prop.data[indexOfLongestU]? prop.data[indexOfLongestU]!.u[uIndex].toFixed(2): 0.00} V` }}</p>
                 </div>
             </div>
         </div>
