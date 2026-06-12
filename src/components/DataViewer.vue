@@ -22,7 +22,7 @@ const uLength = ref(1);
 const indexOfLongestU = ref(0);
 const uIndex = ref(0);
 const logXAxis = ref(false);
-const logYAxis = ref(false);
+const logYAxis = ref(true);
 
 watch(() => prop.data, newData => {
     uLength.value = 1;
