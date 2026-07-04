@@ -22,7 +22,7 @@ const CHIPS: Ref<(ChipData)[]> = ref([new ChipData('', [])]);
 const messageText = ref('');
 const messageType = ref('ok')
 
-function showMessage(text: string, type: 'ok' | 'error') {
+function showMessage(text: string, type: 'ok' | 'error' | 'warn') {
   messageText.value = text;
   messageType.value = type;
   setTimeout(() => messageText.value = '', 3000);
@@ -30,6 +30,10 @@ function showMessage(text: string, type: 'ok' | 'error') {
 
 appWebview.listen<string>('fail-to-open', (event) => {
   showMessage(event.payload, 'error');
+});
+
+appWebview.listen<string>('no-match-spc', (event) => {
+  showMessage(event.payload, 'warn');
 });
 
 const dataShowing = computed(() => {
@@ -148,7 +152,13 @@ async function openDataFile() {
     workingPath.value = filePath;
     invoke("open_one_file", { path: filePath })
       .then(data => {
-        let chip: ChipData = JSON.parse(data as string);
+        let turple = (data as string[]);
+        let chip: ChipData = JSON.parse(turple[0]);
+        let warnMsg = turple[1];
+        if (warnMsg) {
+          showMessage(warnMsg, 'warn');
+        }
+
         CHIPS.value = [chip];
         dataExclude.value = [Array.from({length: chip.devices.length}, () => false)];
         updateMapping(MappingModeIndex.value)
@@ -294,6 +304,17 @@ nav > button {
   content: '×';
   font-weight: bold;
   color: rgb(255, 88, 88);
+  margin-right: 2mm;
+}
+
+.warn {
+  border: 2px solid rgba(255, 192, 88, 0.3);
+}
+
+.warn::before {
+  content: '⚠';
+  font-weight: bold;
+  color: rgb(255, 192, 88);
   margin-right: 2mm;
 }
 
