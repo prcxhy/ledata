@@ -6,7 +6,10 @@
 </h1>
 <h3 align="center">基于<a href="https://github.com/tauri-apps/tauri">Tauri</a>开发的LED器件测试数据可视化浏览器
 </h3>
-⚠️开发者能力有限，仅针对性适配犀谱光电XPQY-EQE(LED测试设备)的LED Mesurement System V3.3.3(测试控制客户端)保存的LED器件性能数据文件⚠️
+
+⚠️开发者能力有限，仅针对性适配犀谱光电XPQY-EQE(LED测试设备)的下列测试控制客户端保存的LED器件性能数据文件⚠️
+- LED Mesurement System V3.3.3
+- XP-EQE1.1 (包是上面那个工程师离职了才有的重做的这个)
 
 ## 下载安装
 请到发布页下载安装包：[Release page](https://github.com/prcxhy/ledata/releases)<br>
