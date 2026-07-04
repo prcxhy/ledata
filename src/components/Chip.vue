@@ -101,7 +101,7 @@ const mappingColor = computed(() => {
             }
         }"
         @click.right.stop.prevent="$emit('exclude-toggle', [prop.chipIndex, index])">
-            <p class="device-label">{{ prop.status[index]? id: "空" }}</p>
+            <p class="device-label">{{ prop.status[index]? prop.devices[index]?.name.split('@')[0]: "空" }}</p>
         </div>
         <ITO />
         <p class="chip-name">{{ prop.name }}</p>
