@@ -111,7 +111,7 @@ fn is_empty_data(device_data: &DeviceData) -> bool {
         .any(|(u_val, l_val)| *u_val > 0.0 && *l_val > 0.0);
 }
 
-fn extract_device_data<T>(file_name: String, workbook: &mut Xlsx<T>, path_buf: PathBuf) -> Result<Chip, String>
+fn extract_device_data<T>(file_name: String, workbook: &mut Xlsx<T>, path_buf: PathBuf) -> Result<(Chip, Option<String>), String>
 where
     T: Seek,
     T: std::io::Read,
@@ -131,19 +131,30 @@ where
             let file_name = e.path().file_stem().unwrap().to_owned().into_string().unwrap();
             if file_name.ends_with(&("VASpectrum,".to_owned() + &chip_name)) {
                 spc_file_str = fs::read_to_string(e.path()).unwrap();
+                break;
             }
         }
     }
 
-    let (wavelength_str, spc_data_str) = spc_file_str.split_once('\n').unwrap();
+    let mut warning: Option<String> = None;
 
     let is_vis = true;
 
-    let wavelength = wavelength_str.trim().split(',').skip(2).map(|piece| {
-        piece.parse::<f64>().unwrap_or(0.0)
-    }).collect::<Vec<f64>>();
-    let spc_length = wavelength.len();
+    let (wavelength_str, spc_data_str) = if spc_file_str.is_empty() {
+        warning = Some(file_name.to_owned() + " 光谱文件缺失");
+        ("", "")
+    } else {
+        spc_file_str.split_once('\n').unwrap()
+    };
 
+    let wavelength = if wavelength_str == "" {
+        Vec::new()
+    } else {
+        wavelength_str.trim().split(',').skip(2).map(|piece| {
+            piece.parse::<f64>().unwrap_or(0.0)
+        }).collect::<Vec<f64>>()
+    };
+    
     let mut number_of_devices: usize = 1;
     
     for i in 0..sheets[0].1.height() {
@@ -154,8 +165,18 @@ where
     
     let u_length = (sheets[0].1.height() - number_of_devices)/number_of_devices;
     
-    let spc_str_vec: Vec<&str> = spc_data_str.trim().split_whitespace().collect();
-
+    let spc_str_vec: Vec<&str> = if !wavelength.is_empty() {
+        let vec: Vec<&str> = spc_data_str.trim().split_whitespace().collect();
+        if vec.len() == number_of_devices * u_length {
+            vec
+        } else {
+            warning = Some(file_name.to_owned() + " 光谱文件不匹配");
+            vec![""; number_of_devices * u_length]
+        }
+    } else {
+        vec![""; number_of_devices * u_length]
+    };
+    
     let mut device_data_vec: Vec<Range<Data>> = Vec::new();
 
     for i in 0..number_of_devices {
@@ -172,11 +193,15 @@ where
         .into_par_iter()
         .zip(spc_str_vec.par_chunks(u_length))
         .map(|(device_data, spc_rows)| {
-            let mut device = DeviceData::new("init", is_vis, u_length, spc_length);
-            device.wavelength = if is_vis {
-                wavelength.as_slice()[115..770].to_vec()
+            let mut device = DeviceData::new("init", is_vis, u_length, 0);
+            device.wavelength = if warning.is_none() {
+                if is_vis {
+                    wavelength.as_slice()[115..770].to_vec()
+                } else {
+                    wavelength.clone()
+                }
             } else {
-                wavelength.clone()
+                Vec::new()
             };
 
             device_data.rows().into_iter().enumerate().for_each(|(index, row)| {
@@ -197,14 +222,17 @@ where
                 device.j[index] = row[3].as_f64().unwrap_or(0.0).max(0.0);
                 device.luminance[index] = lumi_or_radi;
                 device.eqe[index] = eqe;
-                let spc_iter = spc_rows[index].split(',').skip(2).map(|piece| {
-                    piece.parse::<f64>().unwrap_or(0.0)
-                });
-                device.spectra[index] = if is_vis {
-                    spc_iter.skip(115).take(655).collect::<Vec<f64>>()
-                } else {
-                    spc_iter.collect::<Vec<f64>>()
-                };
+
+                if warning.is_none() {
+                    let spc_iter = spc_rows[index].split(',').skip(2).map(|piece| {
+                        piece.parse::<f64>().unwrap_or(0.0)
+                    });
+                    device.spectra[index] = if is_vis {
+                        spc_iter.skip(115).take(655).collect::<Vec<f64>>()
+                    } else {
+                        spc_iter.collect::<Vec<f64>>()
+                    };
+                }
             });
 
             device
@@ -228,10 +256,10 @@ where
         }
     }).collect::<Vec<Option<DeviceData>>>();
 
-    Ok(Chip {
+    Ok((Chip {
         name: chip_name,
         devices: devices_filtered,
-    })
+    }, warning))
 }
 
 fn extract_device_data_old<T>(chip_name: String, workbook: &mut Xlsx<T>) -> Result<Chip, String>
@@ -347,16 +375,16 @@ where
 }
 
 #[tauri::command]
-pub fn open_one_file(path: String) -> Result<String, String> {
+pub fn open_one_file(path: String) -> Result<(String, Option<String>), String> {
     let path_buf = PathBuf::from(path);
     let parent_path = path_buf.parent().unwrap().to_path_buf();
     let chip_name = path_buf.file_stem().unwrap().to_str().unwrap();
     let mut workbook: Xlsx<_> = open_workbook(&path_buf).unwrap();
 
     match extract_device_data_old(chip_name.to_string(), &mut workbook) {
-        Ok(chip_data) => Ok(serde_json::to_string(&chip_data).unwrap()),
+        Ok(chip_data) => Ok((serde_json::to_string(&chip_data).unwrap(), None)),
         Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, parent_path) {
-            Ok(chip_data) => Ok(serde_json::to_string(&chip_data).unwrap()),
+            Ok((chip_data, warning)) => Ok((serde_json::to_string(&chip_data).unwrap(), warning)),
             Err(msg) => Err(msg + " 表格的格式不受支持")
         }
     }
@@ -380,6 +408,7 @@ pub fn open_path(app: AppHandle, path: String) -> Result<String, String> {
     }
 
     let mut chips: Vec<Chip> = Vec::new();
+    let mut warn_msgs: Vec<String> = Vec::new();
     let mut error_msgs: Vec<String> = Vec::new();
 
     let read_results = paths
@@ -389,27 +418,40 @@ pub fn open_path(app: AppHandle, path: String) -> Result<String, String> {
             let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
 
             match extract_device_data_old(chip_name.to_string(), &mut workbook) {
-                Ok(chip_data) => Ok(chip_data),
+                Ok(chip_data) => Ok((chip_data, None)),
                 Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, path_buf.clone()) {
-                    Ok(chip_data) => Ok(chip_data),
+                    Ok((chip_data, warning)) => Ok((chip_data, warning)),
                     Err(msg) => Err(msg + " 表格的格式不受支持")
                 }
             }
         })
-        .collect::<Vec<Result<Chip, String>>>();
+        .collect::<Vec<Result<(Chip, Option<String>), String>>>();
 
     for result in read_results.into_iter() {
         match result {
-            Ok(chip_data) => chips.push(chip_data),
+            Ok((chip_data, warning)) => {
+                chips.push(chip_data);
+                if warning.is_some() {
+                    warn_msgs.push(warning.unwrap());
+                }
+            },
             Err(msg) => error_msgs.push(msg)
         }
     };
 
     if chips.len() == 0 {
         return Err("该目录下没有找到符合支持格式的数据表格".to_string());
-    } else if error_msgs.len() != 0 {
-        let error_text = error_msgs.join("<br>");
-        app.emit_to(EventTarget::any(), "fail-to-open", "以下文件的表格格式不受支持:<br>".to_string() + &error_text).unwrap();
+    } else {
+        if error_msgs.len() != 0 {
+            let error_text = error_msgs.join("<br>");
+            app.emit_to(EventTarget::any(), "fail-to-open", "以下文件的表格格式不受支持:<br>".to_string() + &error_text)
+                .unwrap();
+        }
+        if warn_msgs.len() != 0 {
+            let warn_text = warn_msgs.join("<br>");
+            app.emit_to(EventTarget::any(), "no-match-spc", warn_text)
+                .unwrap();
+        }
     }
 
     Ok(serde_json::to_string(&chips).unwrap())
