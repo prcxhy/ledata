@@ -1,0 +1,71 @@
+name: 'publish'
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          # cache: 'pnpm'
+
+      - name: setup python (for pyo3 build script)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: '.'
+
+      - name: install frontend dependencies
+        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
+        run: pnpm install
+
+      - name: build python extension and cli (bundled via resources)
+        shell: bash
+        # cdylib 产物命名：Windows 无 lib 前缀（name.dll → name.pyd）
+        run: |
+          cargo build --release -p ledata-py -p ledata-cli
+          mkdir -p src-tauri/resources/py-interface src-tauri/resources/cli
+          cp target/release/ledata_py.dll src-tauri/resources/py-interface/ledata_py.pyd
+          cp crates/ledata-py/ledata_py.pyi src-tauri/resources/py-interface/
+          cp target/release/ledata-cli.exe src-tauri/resources/cli/
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          releaseName: 'LEData v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
