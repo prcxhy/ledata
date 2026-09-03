@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Session artifacts (agent conversation outputs, not project code)
+.session
+
+# Rust workspace (target at repo root)
+/target/
+
+# Python
+.venv
+__pycache__/
+.pytest_cache/
