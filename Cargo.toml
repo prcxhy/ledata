@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["src-tauri", "crates/ledata-core"]
+members = ["src-tauri", "crates/ledata-core", "crates/ledata-py"]
 
 [workspace.dependencies]
 ledata-core = { path = "crates/ledata-core" }

@@ -10,3 +10,7 @@ serde = { workspace = true }
 calamine = { workspace = true }
 rayon = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+rust_xlsxwriter = "0.99"
+serde_json = { workspace = true }

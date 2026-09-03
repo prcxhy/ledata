@@ -10,6 +10,7 @@ use crate::error::CoreError;
 use crate::model::{Chip, DeviceData};
 
 /// 目录批量解析结果；warnings/errors 与 GUI 弹窗/事件的文案逐字一致
+#[derive(Debug)]
 pub struct DirOutcome {
     pub chips: Vec<Chip>,
     pub warnings: Vec<String>,
@@ -357,4 +358,36 @@ where
         name: chip_name,
         devices: devices_filtered,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 新格式的唯一干净 Err 路径：首表 height <= 1（越过旧格式解析器直接测）
+    #[test]
+    fn extract_device_data_errs_on_thin_sheet() {
+        let dir = std::env::temp_dir().join(format!("ledata_core_test_thin_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a,b,c.xlsx");
+        let mut wb = rust_xlsxwriter::Workbook::new();
+        wb.add_worksheet().write(0, 0, "only header").unwrap();
+        wb.save(&path).unwrap();
+        let mut workbook: Xlsx<_> = open_workbook(&path).unwrap();
+        let result = extract_device_data("a,b,c".to_string(), &mut workbook, dir.clone());
+        assert_eq!(result.unwrap_err(), "a,b,c");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // parse_file 对格式不支持文件的错误文案与原 GUI 逐字一致
+    #[test]
+    fn unsupported_format_message() {
+        let e = CoreError::UnsupportedFormat { file: "bad".into() };
+        assert_eq!(e.to_string(), "bad 表格的格式不受支持");
+        assert_eq!(CoreError::EmptyDir.to_string(), "该目录为空");
+        assert_eq!(
+            CoreError::NoSupportedData.to_string(),
+            "该目录下没有找到符合支持格式的数据表格"
+        );
+    }
 }

@@ -1,12 +1,12 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Chip {
     pub name: String,
     pub devices: Vec<Option<DeviceData>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeviceData {
     pub name: String,
     pub is_vis: bool,
@@ -92,5 +92,77 @@ impl DeviceData {
             .iter()
             .fold(0.0, |acc, j| acc + j)
             / (leak_index_until as f64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn plain_device() -> DeviceData {
+        DeviceData {
+            name: "S1A@chip".into(),
+            is_vis: true,
+            u: vec![0.0, 1.0, 2.0, 3.0],
+            j: vec![0.0, 0.5, 1.5, 2.5],
+            luminance: vec![0.0, 1.0, 10.0, 20.0],
+            eqe: vec![0.0, 2.0, 5.0, 4.0],
+            wavelength: vec![],
+            spectra: vec![vec![]; 4],
+            max_j: 0.0,
+            max_lumi: 0.0,
+            max_eqe: 0.0,
+            valid_eqe: 0.0,
+            leak_j: 0.0,
+        }
+    }
+
+    #[test]
+    fn calc_summary_data_metrics() {
+        let mut d = plain_device();
+        d.calc_summary_data();
+        assert_eq!(d.max_j, 2.5);
+        assert_eq!(d.max_lumi, 20.0);
+        assert_eq!(d.max_eqe, 5.0);
+        // 有效EQE：亮度 >= 20*0.1=2.0 的位置从 index 2 起，EQE 剩余最大 5.0
+        assert_eq!(d.valid_eqe, 5.0);
+        // 漏电流：亮度>0 之前（index 0..1）J 均值
+        assert_eq!(d.leak_j, 0.0);
+    }
+
+    #[test]
+    fn remove_invalid_voltage_truncates() {
+        let mut d = plain_device();
+        d.u = vec![0.0, 1.0, 2.0, 0.5]; // 末尾电压骤降
+        d.j = vec![0.0, 0.5, 1.5, 9.9];
+        d.luminance = vec![0.0, 1.0, 10.0, 1.0];
+        d.eqe = vec![0.0, 2.0, 5.0, 1.0];
+        d.remove_invalid_voltage();
+        assert_eq!(d.u, vec![0.0, 1.0, 2.0]);
+        assert_eq!(d.j, vec![0.0, 0.5, 1.5]);
+        assert_eq!(d.luminance, vec![0.0, 1.0, 10.0]);
+        assert_eq!(d.eqe, vec![0.0, 2.0, 5.0]);
+    }
+
+    #[test]
+    fn remove_invalid_voltage_tolerates_small_fluctuation() {
+        let mut d = plain_device();
+        // 波动 0.3 V：v.ceil() < prev.floor() 不成立，不应截断
+        d.u = vec![0.0, 1.0, 0.7, 1.5];
+        d.remove_invalid_voltage();
+        assert_eq!(d.u.len(), 4);
+    }
+
+    #[test]
+    fn serde_json_roundtrip() {
+        let mut d = plain_device();
+        d.calc_summary_data();
+        let chip = Chip { name: "c1".into(), devices: vec![Some(d), None] };
+        let json = serde_json::to_string(&chip).unwrap();
+        let back: Chip = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "c1");
+        assert!(back.devices[0].is_some());
+        assert!(back.devices[1].is_none());
+        assert_eq!(back.devices[0].as_ref().unwrap().max_lumi, 20.0);
     }
 }
