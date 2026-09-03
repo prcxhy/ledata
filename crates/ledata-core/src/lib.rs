@@ -1,5 +1,6 @@
 pub mod consumer;
 pub mod error;
+pub mod export;
 pub mod extract;
 pub mod model;
 
@@ -8,5 +9,6 @@ pub use consumer::{
     DeviceSummary, SpectraSummary, SpectrumPoint,
 };
 pub use error::CoreError;
+pub use export::{performance_csv, spectra_csv};
 pub use extract::{parse_dir, parse_file, DirOutcome};
 pub use model::{Chip, DeviceData};

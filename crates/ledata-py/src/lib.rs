@@ -331,6 +331,21 @@ fn parse_dir(py: Python<'_>, path: String) -> PyResult<DirResultPy> {
     })
 }
 
+/// GUI"复制性能数据"同口径 TSV（Origin/Excel 可直接粘贴）；devices 为有数据的器件列表
+#[pyfunction]
+fn performance_csv(devices: Vec<PyRef<'_, DeviceDataPy>>) -> String {
+    let devs: Vec<core::DeviceData> = devices.iter().map(|d| d.inner.clone()).collect();
+    core::performance_csv(&devs)
+}
+
+/// GUI"复制光谱数据"同口径 TSV：u_index 处各器件光谱按波长对齐
+#[pyfunction]
+#[pyo3(signature = (devices, u_index))]
+fn spectra_csv(devices: Vec<PyRef<'_, DeviceDataPy>>, u_index: usize) -> String {
+    let devs: Vec<core::DeviceData> = devices.iter().map(|d| d.inner.clone()).collect();
+    core::spectra_csv(&devs, u_index)
+}
+
 #[pymodule]
 fn ledata_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("LeDataError", LeDataError::type_object(m.py()))?;
@@ -344,5 +359,7 @@ fn ledata_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DirResultPy>()?;
     m.add_function(wrap_pyfunction!(parse_file, m)?)?;
     m.add_function(wrap_pyfunction!(parse_dir, m)?)?;
+    m.add_function(wrap_pyfunction!(performance_csv, m)?)?;
+    m.add_function(wrap_pyfunction!(spectra_csv, m)?)?;
     Ok(())
 }
