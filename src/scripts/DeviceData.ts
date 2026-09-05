@@ -2,6 +2,24 @@ import { ECharts } from 'echarts';
 
 const fontGridColor = '#000';
 
+// 器件 → 曲线颜色 稳定绑定：同名器件在会话内恒定同色，
+// 不随其他器件的增选/取消而重排（echarts 默认按 series 顺序取色，重建图表后会重排）。
+// 增删器件不再影响已分配颜色；跨 Chip 点选时器件名含 @chip 天然唯一。
+const PALETTE = [
+  '#1f77b4', '#1b9e77', '#d62728', '#d95f02', '#9467bd', '#7570b3', '#2ca02c', '#e7298a',
+  '#8c564b', '#66a61e', '#e377c2', '#bcbd22', '#17becf', '#a6761d', '#ff7f0e', '#7f7f7f',
+];
+const deviceColorMap = new Map<string, string>();
+
+function colorFor(name: string): string {
+  let color = deviceColorMap.get(name);
+  if (color === undefined) {
+    color = PALETTE[deviceColorMap.size % PALETTE.length];
+    deviceColorMap.set(name, color);
+  }
+  return color;
+}
+
 class Chip {
   name: string;
   devices: (DeviceData | null)[];
@@ -79,9 +97,12 @@ async function drawSpectra(chart: ECharts, devices: (DeviceData | null)[], uInde
         device!.spectra[uIndex].forEach((value, index) => {
           points3.push([device!.wavelength[index], value]);
         });
+        let c = colorFor(device!.name);
         series.push({
           name: device!.name, type: 'line', data: points3,
           symbol: 'none',
+          itemStyle: { color: c },
+          lineStyle: { color: c },
         })
       }
     })
@@ -181,15 +202,20 @@ async function drawChart(
         points1_1.push([value, device!.j[index]]);
         points1_2.push([value, device!.luminance[index]]);
       });
+      let c = colorFor(device!.name);
       series1.push({
         name: `J-${device!.name}`, type: 'line', data: points1_1,
         yAxisIndex: 0,
         symbolSize: 6,
+        itemStyle: { color: c },
+        lineStyle: { color: c },
       }, {
         name: `${device!.is_vis? 'L': 'R'}-${device!.name}`, type: 'line', data: points1_2,
         yAxisIndex: 1,
         symbol: 'rect',
         symbolSize: 6,
+        itemStyle: { color: c },
+        lineStyle: { color: c },
       });
 
       let points2: number[][] = new Array();
@@ -199,6 +225,8 @@ async function drawChart(
       series2.push({
         name: device!.name, type: 'line', data: points2,
         symbolSize: 6,
+        itemStyle: { color: c },
+        lineStyle: { color: c },
       })
 
       if(device!.spectra.length > uIndex) {
@@ -208,9 +236,12 @@ async function drawChart(
         device!.spectra[uIndex].forEach((value, index) => {
           points3.push([device!.wavelength[index], value]);
         });
+        let c = colorFor(device!.name);
         series3.push({
           name: device!.name, type: 'line', data: points3,
           symbol: 'none',
+          itemStyle: { color: c },
+          lineStyle: { color: c },
         })
       }
     })
