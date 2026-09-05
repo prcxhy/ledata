@@ -356,3 +356,86 @@ fn json_contract_field_names() {
     assert!(v.get("name").is_some());
     std::fs::remove_dir_all(&dir).ok();
 }
+
+// ---------- ISSUES #5：panic 点转错误通道 ----------
+
+/// 损坏/非 xlsx → parse_file 返回 UnsupportedFormat（不 panic）
+#[test]
+fn broken_workbook_errors_gracefully() {
+    let dir = unique_temp_dir("broken");
+    let path = dir.join("broken.xlsx");
+    std::fs::write(&path, b"this is not a zip archive").unwrap();
+    let err = parse_file(&path).unwrap_err();
+    assert_eq!(err.to_string(), "broken 表格的格式不受支持");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 旧格式主表 height < 2 → usize 下溢修复：Err 而非 panic（文件名含逗号走完整回退链）
+#[test]
+fn thin_sheet_errors_gracefully() {
+    let dir = unique_temp_dir("thin");
+    let path = dir.join("20260101 000000,Data,thin.xlsx");
+    let mut wb = rust_xlsxwriter::Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write(0, 0, "header only").unwrap();
+    wb.save(&path).unwrap();
+
+    let err = parse_file(&path).unwrap_err();
+    // 错误文案用完整 file_stem（与 GUI 口径一致）
+    assert_eq!(err.to_string(), "20260101 000000,Data,thin 表格的格式不受支持");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 无关命名的普通 xlsx（文件名无两个逗号）→ Err 而非 split 越界 panic
+#[test]
+fn irrelevant_named_workbook_errors_gracefully() {
+    let dir = unique_temp_dir("irrelevant");
+    let path = dir.join("数据备份.xlsx");
+    let mut wb = rust_xlsxwriter::Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write(0, 0, "x").unwrap();
+    ws.write(1, 0, "y").unwrap();
+    ws.write(2, 0, "z").unwrap();
+    wb.save(&path).unwrap();
+
+    let err = parse_file(&path).unwrap_err();
+    assert_eq!(err.to_string(), "数据备份 表格的格式不受支持");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// 目录批量：正常 chip 与无关/损坏文件混合 → 1 chip + errors 两条，不 panic
+#[test]
+fn parse_dir_mixed_with_irrelevant_files_reports_errors() {
+    let dir = unique_temp_dir("dir_mixed_bad");
+
+    let devices: Vec<NewDeviceSpec> = vec![NewDeviceSpec {
+        site_name: "Site1".into(),
+        u: vec![0.0, 1.0],
+        j: vec![0.1, 0.2],
+        lumi: vec![0.0, 1.0],
+        eqe: vec![0.0, 1.0],
+    }];
+    write_new_format(&dir, "ok1", &devices, None);
+
+    let plain = dir.join("数据备份.xlsx");
+    let mut wb = rust_xlsxwriter::Workbook::new();
+    let ws = wb.add_worksheet();
+    ws.write(0, 0, "x").unwrap();
+    ws.write(1, 0, "y").unwrap();
+    wb.save(&plain).unwrap();
+
+    let broken = dir.join("broken.xlsx");
+    std::fs::write(&broken, b"not a zip").unwrap();
+
+    let outcome = parse_dir(&dir).unwrap();
+    assert_eq!(outcome.chips.len(), 1);
+    assert_eq!(outcome.chips[0].name, "ok1");
+    // ok1 未提供光谱文件 → 忠实行为：光谱缺失 warning
+    assert_eq!(outcome.warnings, vec!["20260101 000000,Data,ok1 光谱文件缺失".to_string()]);
+    assert_eq!(outcome.errors.len(), 2);
+    assert!(outcome.errors.iter().all(|e| e.ends_with("表格的格式不受支持")));
+    assert!(outcome.errors.iter().any(|e| e.starts_with("数据备份")));
+    assert!(outcome.errors.iter().any(|e| e.starts_with("broken")));
+
+    std::fs::remove_dir_all(&dir).ok();
+}

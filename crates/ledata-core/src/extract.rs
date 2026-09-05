@@ -22,7 +22,11 @@ pub fn parse_file(path: &Path) -> Result<(Chip, Option<String>), CoreError> {
     let path_buf = path.to_path_buf();
     let parent_path = path_buf.parent().unwrap().to_path_buf();
     let chip_name = path_buf.file_stem().unwrap().to_str().unwrap();
-    let mut workbook: Xlsx<_> = open_workbook(&path_buf).unwrap();
+    // 损坏/非 xlsx 文件走错误通道而非 panic（ISSUES #5）
+    let mut workbook: Xlsx<_> = match open_workbook(&path_buf) {
+        Ok(wb) => wb,
+        Err(_) => return Err(CoreError::UnsupportedFormat { file: chip_name.to_string() }),
+    };
 
     match extract_device_data_old(chip_name.to_string(), &mut workbook) {
         Ok(chip_data) => Ok((chip_data, None)),
@@ -58,7 +62,11 @@ pub fn parse_dir(path: &Path) -> Result<DirOutcome, CoreError> {
         .par_iter()
         .map(|path| {
             let chip_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
+            // 损坏/非 xlsx 文件计入 errors 而非 panic（ISSUES #5）
+            let mut workbook: Xlsx<_> = match open_workbook(path) {
+                Ok(wb) => wb,
+                Err(_) => return Err(chip_name + " 表格的格式不受支持"),
+            };
 
             match extract_device_data_old(chip_name.to_string(), &mut workbook) {
                 Ok(chip_data) => Ok((chip_data, None)),
@@ -108,7 +116,12 @@ where
         return Err(file_name);
     }
 
-    let chip_name = file_name.split(',').collect::<Vec<&str>>()[2].to_owned();
+    // 文件名不含两个逗号（无关命名的 xlsx）走错误通道而非 panic（ISSUES #5）
+    let parts: Vec<&str> = file_name.split(',').collect();
+    if parts.len() < 3 {
+        return Err(file_name);
+    }
+    let chip_name = parts[2].to_owned();
 
     let mut spc_file_str = String::new();
 
@@ -254,6 +267,10 @@ where
     T: std::io::Read,
 {
     let sheets = workbook.worksheets();
+    // 主表行数 < 2 时 u_length 会 usize 下溢，走错误通道而非 panic（ISSUES #5）
+    if sheets[0].1.height() < 2 {
+        return Err(chip_name);
+    }
     let u_length = sheets[0].1.height() - 2;
     let mut spc_length = 1;
     for sheet in sheets[1..].iter() {
