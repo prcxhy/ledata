@@ -4,7 +4,9 @@ import { computed, nextTick, Ref, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { resourceDir, join } from "@tauri-apps/api/path";
+import { getVersion } from "@tauri-apps/api/app";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import DataViewer from './components/DataViewer.vue';
 import Chip from "./components/Chip.vue";
 import { Chip as ChipData, DeviceData } from "./scripts/DeviceData";
@@ -13,6 +15,9 @@ import IconExcel from "./assets/excel.svg?component";
 import IconHelp from "./assets/help.svg?component";
 import IconArrow from "./assets/down.svg?component";
 import IconAgent from "./assets/api.svg?component";
+import IconAbout from "./assets/info.svg?component";
+import IconUpdate from "./assets/update.svg?component";
+import IconGithub from "./assets/github.svg?component";
 
 const appWebview = getCurrentWebviewWindow();
 
@@ -55,6 +60,112 @@ async function copyAgentOnboarding() {
     showMessage(String(e), "error");
   }
 }
+
+// ---------- About / 版本更新检测 ----------
+
+const RELEASE_API = "https://api.github.com/repos/prcxhy/ledata/releases/latest";
+const RELEASES_PAGE = "https://github.com/prcxhy/ledata/releases/latest";
+const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 当天首次启动测一次：24h 内的缓存直接复用
+
+const appVersion = ref("");
+const hasUpdate = ref(false);
+const latestVersion = ref("");
+const updateCheckFailed = ref(false);
+const showAbout = ref(false);
+
+function semverGt(a: string, b: string): boolean {
+  const pa = a.split(".").map(n => parseInt(n, 10));
+  const pb = b.split(".").map(n => parseInt(n, 10));
+  for (var i = 0; i < 3; i ++) {
+    let x = pa[i] || 0;
+    let y = pb[i] || 0;
+    if (x !== y) {
+      return x > y;
+    }
+  }
+  return false;
+}
+
+function parseTagVersion(tag: string): string | null {
+  let m = tag.match(/^app-v(\d+\.\d+\.\d+)$/);
+  return m? m[1]: null;
+}
+
+function applyLatest(latest: string | null) {
+  if (latest) {
+    latestVersion.value = latest;
+    hasUpdate.value = semverGt(latest, appVersion.value);
+    updateCheckFailed.value = false;
+  } else {
+    updateCheckFailed.value = true;
+  }
+}
+
+async function checkForUpdate(force = false) {
+  try {
+    if (appVersion.value === "") {
+      appVersion.value = await getVersion();
+    }
+    if (!force) {
+      let cached = localStorage.getItem("ledata.update-check");
+      if (cached) {
+        let entry = JSON.parse(cached);
+        if (Date.now() - entry.checkedAt < CHECK_INTERVAL) {
+          applyLatest(entry.latest ?? null);
+          return;
+        }
+      }
+    }
+    let resp = await fetch(RELEASE_API);
+    let latest = parseTagVersion((await resp.json()).tag_name);
+    // 检测失败也记录时间：当天不再重试
+    localStorage.setItem("ledata.update-check", JSON.stringify({ checkedAt: Date.now(), latest }));
+    applyLatest(latest);
+  } catch {
+    localStorage.setItem("ledata.update-check", JSON.stringify({ checkedAt: Date.now(), latest: null }));
+    updateCheckFailed.value = true;
+  }
+}
+
+// 当天第一次启动时检测一次（24h 内有缓存则跳过）
+checkForUpdate();
+
+function openAbout() {
+  showAbout.value = true;
+  // 从未成功检测过（如启动时断网）→ 打开时兜底测一次
+  let cached = localStorage.getItem("ledata.update-check");
+  if (!cached || !JSON.parse(cached).latest) {
+    checkForUpdate(true);
+  }
+}
+
+function openLink(url: string) {
+  openUrl(url).catch(e => showMessage(String(e), "error"));
+}
+
+const aboutLinks = [
+  { icon: IconGithub, label: "仓库地址", url: "https://github.com/prcxhy/ledata" },
+  { icon: null, label: "问题反馈 (Issues)", url: "https://github.com/prcxhy/ledata/issues" },
+  { icon: null, label: "GPL-3.0 License", url: "https://www.gnu.org/licenses/gpl-3.0.html" },
+];
+
+const aboutCredits = [
+  { group: "框架", items: [
+    { name: "Tauri", url: "https://github.com/tauri-apps/tauri" },
+    { name: "Vue", url: "https://github.com/vuejs/core" },
+    { name: "Vite", url: "https://github.com/vitejs/vite" },
+    { name: "TypeScript", url: "https://github.com/microsoft/TypeScript" },
+  ]},
+  { group: "功能库", items: [
+    { name: "ECharts", url: "https://github.com/apache/echarts" },
+    { name: "calamine", url: "https://github.com/tafia/calamine" },
+    { name: "rayon", url: "https://github.com/rayon-rs/rayon" },
+    { name: "PyO3", url: "https://github.com/PyO3/pyo3" },
+    { name: "maturin", url: "https://github.com/PyO3/maturin" },
+    { name: "clap", url: "https://github.com/clap-rs/clap" },
+    { name: "tauri 官方插件集", url: "https://github.com/tauri-apps/plugins-workspace" },
+  ]},
+];
 
 appWebview.listen<string>('fail-to-open', (event) => {
   showMessage(event.payload, 'error');
@@ -247,6 +358,39 @@ function excludeAll(chipIndex: number) {
       </TransitionGroup>
     </div>
   </Teleport>
+  <Teleport to="body">
+    <Transition>
+      <div v-if="showAbout" id="about-overlay" @click.self="showAbout = false">
+        <div id="about-dialog">
+          <button id="about-close" @click="showAbout = false">✕</button>
+          <h1>LEData <span>v{{ appVersion }}</span></h1>
+          <p class="about-desc">LED 器件测试数据可视化浏览器</p>
+          <div id="about-update">
+            <p v-if="hasUpdate" class="update-available">
+              <IconUpdate />新版本 {{ latestVersion }} 可用
+              <button @click="openLink(RELEASES_PAGE)">前往下载更新</button>
+            </p>
+            <p v-else-if="updateCheckFailed" class="update-failed">未能检测更新</p>
+            <p v-else class="update-latest">已是最新版本</p>
+          </div>
+          <div class="about-links">
+            <p v-for="link in aboutLinks" :key="link.url" class="about-link" @click="openLink(link.url)">
+              <component :is="link.icon" v-if="link.icon" />
+              {{ link.label }}
+            </p>
+          </div>
+          <h2>开源致谢</h2>
+          <div v-for="group in aboutCredits" :key="group.group" class="about-credit-group">
+            <p class="credit-group">{{ group.group }}</p>
+            <p v-for="item in group.items" :key="item.url" class="about-link" @click="openLink(item.url)">
+              {{ item.name }}
+            </p>
+          </div>
+          <p class="credit-tail">以及所有间接依赖的开源项目</p>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
   <nav>
     <button @click="openDataFile">
       <IconExcel />打开文件
@@ -257,6 +401,10 @@ function excludeAll(chipIndex: number) {
     <p>{{ workingPath }}</p>
     <button @click="copyAgentOnboarding">
       <IconAgent />Agent 接入
+    </button>
+    <button @click="openAbout">
+      <IconAbout />关于
+      <span v-if="hasUpdate" id="about-badge"></span>
     </button>
   </nav>
   <div id="content" :style="{ right: dataShowing.length > 0 ? '0px' : '-127mm' }">
@@ -378,5 +526,149 @@ nav > button {
 .v-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+nav > button {
+  position: relative;
+}
+
+#about-badge {
+  position: absolute;
+  top: 0mm;
+  right: 0mm;
+  width: 2mm;
+  height: 2mm;
+  border-radius: 50%;
+  background-color: rgb(59, 209, 39);
+}
+
+#about-overlay {
+  position: fixed;
+  inset: 0px;
+  background-color: rgba(0, 0, 0, 0.3);
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+
+#about-dialog {
+  background-color: rgb(250, 250, 250);
+  border: 1px solid white;
+  border-radius: 2mm;
+  filter: drop-shadow(0px 0px 8px rgba(0, 0, 0, 0.2));
+  padding: 6mm;
+  width: 110mm;
+  user-select: none;
+}
+
+#about-dialog h1 {
+  font-size: 6mm;
+  margin: 0px 0px 2mm 0px;
+}
+
+#about-dialog h1 span {
+  color: rgb(128, 128, 128);
+  font-size: 4mm;
+  font-weight: normal;
+}
+
+#about-dialog h2 {
+  font-size: 4.5mm;
+  margin: 4mm 0px 1mm 0px;
+}
+
+#about-close {
+  float: right;
+  font-size: 5mm;
+  width: 6mm;
+  height: 6mm;
+  justify-content: center;
+  border-radius: 1mm;
+  color: rgb(128, 128, 128);
+}
+
+.about-desc {
+  color: rgb(96, 96, 96);
+  margin: 0px 0px 3mm 0px;
+}
+
+#about-update {
+  background-color: rgb(240, 240, 240);
+  border-radius: 2mm;
+  padding: 2mm 3mm;
+  margin-bottom: 3mm;
+}
+
+#about-update > p {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+}
+
+#about-update svg {
+  width: 4.5mm;
+  height: 4.5mm;
+}
+
+.update-available button {
+  border-radius: 1mm;
+  background-color: rgb(223, 223, 223);
+  padding: 0px 2mm;
+  height: 7mm;
+}
+
+.update-available {
+  color: rgb(40, 120, 40);
+  font-weight: bold;
+}
+
+.update-failed,
+.update-latest {
+  color: rgb(128, 128, 128);
+}
+
+.about-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 4mm;
+  margin-bottom: 2mm;
+}
+
+.about-links > p {
+  display: flex;
+  align-items: center;
+  gap: 1mm;
+}
+
+.about-links svg {
+  width: 4mm;
+  height: 4mm;
+}
+
+.about-credit-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1mm 3mm;
+  margin-bottom: 1.5mm;
+}
+
+.credit-group {
+  color: rgb(128, 128, 128);
+  min-width: 12mm;
+}
+
+.about-link {
+  color: rgb(64, 64, 64);
+  cursor: pointer;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+  color: black;
+}
+
+.credit-tail {
+  color: rgb(160, 160, 160);
+  font-size: 3.5mm;
 }
 </style>
