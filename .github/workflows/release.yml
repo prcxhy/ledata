@@ -31,12 +31,19 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10
-          
+
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           # cache: 'pnpm'
+
+      - name: setup python (for pyo3 build script)
+        # 守卫：workspace 代码（cargo workspace + ledata-py）合入前自动跳过
+        if: hashFiles('crates/ledata-py/Cargo.toml') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
@@ -47,11 +54,24 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          # workspace 合入前 target 在 src-tauri/ 下，合入后在根目录
+          workspaces: ${{ hashFiles('Cargo.toml') != '' && '.' || './src-tauri -> target' }}
 
       - name: install frontend dependencies
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
         run: pnpm install
+
+      - name: build python extension and cli (bundled via resources)
+        # 守卫：ledata-py/ledata-cli 合入前跳过，仅打包占位 README（本地构建同样优雅降级）
+        if: hashFiles('crates/ledata-py/Cargo.toml') != ''
+        shell: bash
+        # cdylib 产物命名：Windows 无 lib 前缀（name.dll → name.pyd）
+        run: |
+          cargo build --release -p ledata-py -p ledata-cli
+          mkdir -p src-tauri/resources/py-interface src-tauri/resources/cli
+          cp target/release/ledata_py.dll src-tauri/resources/py-interface/ledata_py.pyd
+          cp crates/ledata-py/ledata_py.pyi src-tauri/resources/py-interface/
+          cp target/release/ledata-cli.exe src-tauri/resources/cli/
 
       - uses: tauri-apps/tauri-action@v0
         env:
