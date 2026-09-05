@@ -364,7 +364,7 @@ function excludeAll(chipIndex: number) {
         <div id="about-dialog">
           <button id="about-close" @click="showAbout = false">✕</button>
           <h1>LEData <span>v{{ appVersion }}</span></h1>
-          <p class="about-desc">LED 器件测试数据可视化浏览器，针对犀谱光电 XPQY-EQE 测试设备数据。</p>
+          <p class="about-desc">LED 器件测试数据可视化浏览器</p>
           <div id="about-update">
             <p v-if="hasUpdate" class="update-available">
               <IconUpdate />新版本 {{ latestVersion }} 可用
@@ -534,13 +534,12 @@ nav > button {
 
 #about-badge {
   position: absolute;
-  top: -1mm;
-  right: -1mm;
-  width: 3mm;
-  height: 3mm;
+  top: 0mm;
+  right: 0mm;
+  width: 2mm;
+  height: 2mm;
   border-radius: 50%;
   background-color: rgb(59, 209, 39);
-  border: 1px solid white;
 }
 
 #about-overlay {
@@ -584,6 +583,7 @@ nav > button {
   width: 6mm;
   height: 6mm;
   justify-content: center;
+  border-radius: 1mm;
   color: rgb(128, 128, 128);
 }
 
@@ -629,6 +629,7 @@ nav > button {
 
 .about-links {
   display: flex;
+  justify-content: space-between;
   gap: 4mm;
   margin-bottom: 2mm;
 }
