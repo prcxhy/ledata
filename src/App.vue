@@ -351,11 +351,6 @@ nav > button {
   transition: all 0.3s ease;
 }
 
-/* 先消失的条目脱离文档流，避免其余 toast 跳动 */
-.v-leave-active {
-  position: absolute;
-}
-
 .v-enter-from,
 .v-leave-to {
   opacity: 0;
