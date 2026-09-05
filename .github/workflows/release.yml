@@ -68,10 +68,11 @@ jobs:
         # cdylib 产物命名：Windows 无 lib 前缀（name.dll → name.pyd）
         run: |
           cargo build --release -p ledata-py -p ledata-cli
-          mkdir -p src-tauri/resources/py-interface src-tauri/resources/cli
+          mkdir -p src-tauri/resources/py-interface src-tauri/resources/cli src-tauri/resources/skill
           cp target/release/ledata_py.dll src-tauri/resources/py-interface/ledata_py.pyd
           cp crates/ledata-py/ledata_py.pyi src-tauri/resources/py-interface/
           cp target/release/ledata-cli.exe src-tauri/resources/cli/
+          cp .agents/skills/ledata-python-interface/SKILL.md src-tauri/resources/skill/
 
       - uses: tauri-apps/tauri-action@v0
         env:
