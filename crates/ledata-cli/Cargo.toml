@@ -1,6 +1,6 @@
 [package]
 name = "ledata-cli"
-version = "1.4.0"
+version = "1.5.0"
 description = "LEData 命令行接口（面向 Agent/自动化脚本，共用 ledata-core）"
 authors = ["prcxhy"]
 edition = "2021"

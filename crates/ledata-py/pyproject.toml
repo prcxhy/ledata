@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "ledata-py"
-version = "1.4.0"
+version = "1.5.0"
 description = "LEData Python 绑定：LED 器件测试数据提取（与 GUI 同一 Rust 核心）"
 authors = [{ name = "prcxhy" }]
 requires-python = ">=3.10"

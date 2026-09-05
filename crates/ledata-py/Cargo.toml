@@ -1,6 +1,6 @@
 [package]
 name = "ledata-py"
-version = "1.4.0"
+version = "1.5.0"
 description = "LEData Python 绑定（GUI / Python / CLI 共用 ledata-core）"
 authors = ["prcxhy"]
 edition = "2021"
