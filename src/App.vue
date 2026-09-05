@@ -3,6 +3,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { computed, nextTick, Ref, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { resourceDir, join } from "@tauri-apps/api/path";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import DataViewer from './components/DataViewer.vue';
 import Chip from "./components/Chip.vue";
 import { Chip as ChipData, DeviceData } from "./scripts/DeviceData";
@@ -10,6 +12,7 @@ import IconOpen from "./assets/folder-open.svg?component";
 import IconExcel from "./assets/excel.svg?component";
 import IconHelp from "./assets/help.svg?component";
 import IconArrow from "./assets/down.svg?component";
+import IconAgent from "./assets/api.svg?component";
 
 const appWebview = getCurrentWebviewWindow();
 
@@ -34,6 +37,23 @@ function showMessage(text: string, type: 'ok' | 'error' | 'warn') {
   setTimeout(() => {
     toasts.value = toasts.value.filter(t => t.id !== id);
   }, 3000);
+}
+
+async function copyAgentOnboarding() {
+  try {
+    const dir = (await resourceDir()).replace(/[\\/]+$/, "");
+    const skillPath = await join(dir, "skill", "SKILL.md");
+    const promptText =
+      `我已安装 LEData 桌面应用（LED 器件测试数据工具），它自带面向 Agent 的数据接口技能。请按以下步骤完成接入：\n` +
+      `1. 读取 "${skillPath}"；\n` +
+      `2. 将文件中所有 <LEDATA_INSTALL_DIR> 占位符替换为 "${dir}"；\n` +
+      `3. 将修改后的内容安装为你的技能（保存到你的技能目录，例如 ~/.agents/skills/ledata-python-interface/SKILL.md，或按你所用的技能安装机制处理）；\n` +
+      `4. 安装完成后，我后续提到 LED 数据分析时请优先使用该技能中的接口。`;
+    await writeText(promptText);
+    showMessage("已复制提示词，请粘贴到你的 Agent 对话中完成接入", "ok");
+  } catch (e) {
+    showMessage(String(e), "error");
+  }
 }
 
 appWebview.listen<string>('fail-to-open', (event) => {
@@ -235,6 +255,9 @@ function excludeAll(chipIndex: number) {
       <IconOpen />打开文件夹
     </button>
     <p>{{ workingPath }}</p>
+    <button @click="copyAgentOnboarding">
+      <IconAgent />Agent 接入
+    </button>
   </nav>
   <div id="content" :style="{ right: dataShowing.length > 0 ? '0px' : '-127mm' }">
     <div id="selector">
