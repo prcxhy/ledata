@@ -1,6 +1,6 @@
 ---
 name: ledata-python-interface
-description: 用 ledata_py / ledata-cli 提取与导出 LED 器件测试数据（xlsx）。当需要在本项目中用 Python 或命令行读取器件性能数据、按电压提取光谱、导出 Origin 口径 TSV、或调用 LEData 的数据口径做自动化时使用。也用于理解用户的 LED 器件分析需求（片子/器件点/批次/EQE/光谱等术语）并回答 LEData 桌面应用的使用问题。
+description: 用 ledata_py / ledata-cli 提取与导出 LED 器件测试数据（xlsx）。当需要用 Python 或命令行读取器件性能数据、按电压提取光谱、导出 Origin 口径 TSV、或调用 LEData 的数据口径做自动化时使用。也用于理解用户的 LED 器件分析需求（片子/器件点/批次/EQE/光谱等术语）并回答 LEData 桌面应用的使用问题。
 ---
 
 # LEData 数据接口（LED 器件测试数据分析）
@@ -36,8 +36,9 @@ GUI 玻片图上的 8 个位置 A–H 对应 `devices` 的 8 个槽位（0–7�
 
 - **打开数据**：工具栏"打开文件"（单个 xlsx）或"打开文件夹"（整个目录批量加载）。
 - **器件性能 Mapping**：左侧玻片图按所选模式给器件点着色（越红值越大），模式有：最大亮度/辐照度、最大 EQE、有效 EQE、最大电流密度、平均漏电流（不准，仅供参考）；右键器件点/玻片可排除异常点。
-- **绘制曲线**：左键点选器件点（或玻片全选）加入右侧绘图；三张图——J/亮度-电压（双 Y 轴）、EQE-亮度（可切对数轴）、光谱（滑块选电压）。
+- **绘制曲线**：左键点选器件点（或玻片全选）加入右侧绘图；三张图——J/亮度-电压（双 Y 轴）、EQE-亮度（可切对数轴）、光谱（滑块选电压）。每个器件点的曲线颜色固定绑定该器件，增删其他器件不会改变颜色。
 - **导出**："复制性能数据/复制光谱数据"到剪贴板（制表符分隔，Origin/Excel 直接粘贴）；"导出图片"（PNG，仅供预览）。
+- **Agent 接入**：工具栏右侧按钮，一键复制接入提示词——按提示把本技能安装到你的 Agent 即可（即你正在读的这份文件）。
 
 ## Python/CLI 接口能力（大白话 + 例句）
 
@@ -53,11 +54,11 @@ GUI 玻片图上的 8 个位置 A–H 对应 `devices` 的 8 个槽位（0–7�
 | "画个 J-V 曲线" | 取 `d.u`/`d.j` 数组后由你（Agent）用 matplotlib 自绘 |
 | "哪个点失效了/数据不完整" | summary 里 `n_points` 异常、槽位为 `null` 的器件 |
 
-环境与 API 细节见下；CLI 版本把上面每件事做成子命令式参数（`ledata-cli <路径> [--voltage V] [--site 1A] [--full] [--csv performance|spectra]`），适合没有 Python 环境时子进程调用。
+CLI 版本把上面每件事做成命令行参数（`ledata-cli <路径> [--voltage V] [--site 1A] [--full] [--csv performance|spectra]`），适合没有 Python 环境时子进程调用。
 
 ## 环境
 
-### 普通用户（安装版，路径含占位符，按用户实际安装目录替换）
+需自备 Python ≥ 3.10 与 numpy。
 
 ```python
 import sys
@@ -65,19 +66,9 @@ sys.path.insert(0, r"<LEDATA_INSTALL_DIR>\py-interface")
 import ledata_py as lp
 ```
 
+- `<LEDATA_INSTALL_DIR>` 为 LEData 的实际安装目录（桌面 App 的 exe 所在目录，如 `C:\Program Files\ledata`）。
+- 必须 `sys.path.insert(0, ...)`，验证 `lp.__file__` 指向安装目录下的 py-interface。
 - CLI：`<LEDATA_INSTALL_DIR>\cli\ledata-cli.exe`
-- 需自备 Python ≥ 3.10 与 numpy；必须 `sys.path.insert(0, ...)`，验证 `lp.__file__` 指向安装目录。
-
-### 开发者（本仓库）
-
-```shell
-# 仓库根目录
-uv venv .venv && source .venv/Scripts/activate
-uv pip install maturin pytest numpy
-cd crates/ledata-py && maturin develop --release
-```
-
-绑定更新必须重新 `maturin develop`（editable 安装会遮蔽手动拷贝的 pyd）。
 
 ## 典型任务
 
@@ -101,7 +92,7 @@ pts = chip.spectra_at(3.5, site="2")        # site 过滤，"2"/"S2@02" 均可
 
 - 匹配规则：各自电压列 `argmin(|u − V|)`，并列取先出现者；
 - 无光谱数据（warning 场景）时返回 None；
-- 解析始终全量，"不提取"只发生在输出/消费层。
+- 光谱数据在解析时全量读入，"不提取"只发生在输出/消费层。
 
 ### 导出 Origin 口径 TSV
 
@@ -128,11 +119,4 @@ ledata-cli <path> --csv performance      # GUI 同口径 TSV 到 stdout
   `NoSupportedDataError` / `InvalidPathError`（中文文案，与 GUI 一致）。
 - 目录里混入无关命名/损坏的 xlsx 会作为 per-file 错误返回（GUI 弹窗、
   `DirResult.errors`、CLI `errors` 字段），其余文件正常解析，不是整体失败。
-- 真实样例在 `.session/fixtures/`（快捷方式，路径不入库）；pytest 真实用例
-  路径不可达时自动 skip。
-- 三方对拍（改导出口径必跑）：`.venv/Scripts/python tests/golden/run_golden.py`。
-- 版本发布前六处同步：package.json / src-tauri/tauri.conf.json /
-  src-tauri/Cargo.toml / crates/{ledata-core,ledata-py,ledata-cli}/Cargo.toml。
-- 分发：release 分支 push 或 workflow_dispatch 触发；py-interface、CLI 与
-  本 SKILL 文件随安装包落 `<安装目录>\py-interface\`、`<安装目录>\cli\`、
-  `<安装目录>\skill\`。
+- 目录里的非 xlsx 文件（如光谱 CSV）会被自动忽略，无需预处理。
