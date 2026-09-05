@@ -26,6 +26,9 @@ dist-ssr
 # Session artifacts (agent conversation outputs, not project code)
 .session
 
+# Build-staged artifacts (copied by CI release workflow, not committed)
+src-tauri/resources/skill/SKILL.md
+
 # Rust workspace (target at repo root)
 /target/
 

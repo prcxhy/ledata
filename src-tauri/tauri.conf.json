@@ -33,7 +33,8 @@
     ],
     "resources": {
       "resources/py-interface/*": "py-interface/",
-      "resources/cli/*": "cli/"
+      "resources/cli/*": "cli/",
+      "resources/skill/*": "skill/"
     }
   }
 }

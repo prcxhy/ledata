@@ -9,11 +9,18 @@ body {
 
 nav {
     background-color: rgb(223, 223, 223);
-    display: flex;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     gap: 2mm;
     padding: 0px 2mm;
     height: 1cm;
     align-items: center;
+}
+
+nav > p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 p {
