@@ -401,4 +401,63 @@ async function drawChart(
   }
 }
 
+/**
+ * GUI"复制性能数据"导出口径：制表符分隔，Origin/Excel 可直接粘贴。
+ * 数字格式化依赖 JS Number.prototype.toString（最短往返表示）。
+ */
+export function formatPerformance(devices: (DeviceData | null)[], indexOfLongestU: number): string {
+  let row0 = 'U';
+  let row1 = 'V';
+  let row2 = '';
+  for(var i = 0; i < devices.length; i ++) {
+    row0 += devices[i]!.is_vis? '\tJ\tLuminance\tEQE': '\tJ\tRadiance\tEQE';
+    row1 += devices[i]!.is_vis? '\tmA/cm²\tcd/m²\t%': '\tmA/cm²\tW/sr/m²\t%';
+    row2 += `\t${devices[i]!.name}\t${devices[i]!.name}\t${devices[i]!.name}`;
+  }
+  let str = `${row0}\n${row1}\n${row2}\n`;
+  devices[indexOfLongestU]!.u.forEach((uVal, index) => {
+    let row = devices.map(d => {
+      if(d && d.u.length > index) {
+        return [d.j[index], d.luminance[index], d.eqe[index]]
+      } else {
+        return ['','','']
+      }
+    }).flat();
+    row.splice(0, 0, uVal);
+    let rowString = row.join('\t') + '\n';
+    str += rowString;
+  })
+  return str;
+}
+
+/**
+ * GUI"复制光谱数据"导出口径：uIndex 处的各器件光谱按波长对齐。
+ */
+export function formatSpectra(devices: (DeviceData | null)[], uIndex: number): string {
+  let row0 = 'Wavelength';
+  let row1 = 'nm';
+  let row2 = '';
+  for(var i = 0; i < devices.length; i ++) {
+    if(devices[i]!.u.length <= uIndex) {
+      continue;
+    }
+    row0 +='\tIntensity';
+    row2 +=`\t${devices[i]!.name}`;
+  }
+  let str = `${row0}\n${row1}\n${row2}\n`;
+  devices[0]!.wavelength.forEach((lambda, index) => {
+    let row = devices.map(d => {
+      if(d && d.u.length > uIndex) {
+        return [d.spectra[uIndex][index]]
+      } else {
+        return []
+      }
+    }).flat();
+    row.splice(0, 0, lambda);
+    let rowString = row.join('\t') + '\n';
+    str += rowString;
+  })
+  return str;
+}
+
 export { Chip, DeviceData, drawChart, drawSpectra }

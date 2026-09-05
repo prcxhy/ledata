@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["src-tauri", "crates/ledata-core", "crates/ledata-py", "crates/ledata-cli"]
+
+[workspace.dependencies]
+ledata-core = { path = "crates/ledata-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+calamine = "0.35"
+rayon = "1"
+thiserror = "2"

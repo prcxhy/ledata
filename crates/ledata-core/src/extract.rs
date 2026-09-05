@@ -1,106 +1,100 @@
-use std::{fs, io::Seek, path::PathBuf};
+use std::{fs, io::Seek, path::{Path, PathBuf}};
 
 use calamine::{Data, DataType, Range, Reader, Xlsx, open_workbook};
 use rayon::{iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
     IntoParallelRefMutIterator, ParallelIterator,
 }, slice::ParallelSlice};
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, EventTarget};
 
-#[derive(Serialize)]
-struct Chip {
-    name: String,
-    devices: Vec<Option<DeviceData>>,
+use crate::error::CoreError;
+use crate::model::{Chip, DeviceData};
+
+/// 目录批量解析结果；warnings/errors 与 GUI 弹窗/事件的文案逐字一致
+#[derive(Debug)]
+pub struct DirOutcome {
+    pub chips: Vec<Chip>,
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
 }
 
-#[derive(Serialize)]
-struct DeviceData {
-    name: String,
-    is_vis: bool,
-    u: Vec<f64>,
-    j: Vec<f64>,
-    luminance: Vec<f64>,
-    eqe: Vec<f64>,
-    wavelength: Vec<f64>,
-    spectra: Vec<Vec<f64>>,
-    max_j: f64,
-    max_lumi: f64,
-    max_eqe: f64,
-    valid_eqe: f64,
-    leak_j: f64,
-}
+/// 对应 GUI `open_one_file`：单文件解析，先旧格式后新格式回退
+pub fn parse_file(path: &Path) -> Result<(Chip, Option<String>), CoreError> {
+    let path_buf = path.to_path_buf();
+    let parent_path = path_buf.parent().unwrap().to_path_buf();
+    let chip_name = path_buf.file_stem().unwrap().to_str().unwrap();
+    // 损坏/非 xlsx 文件走错误通道而非 panic（ISSUES #5）
+    let mut workbook: Xlsx<_> = match open_workbook(&path_buf) {
+        Ok(wb) => wb,
+        Err(_) => return Err(CoreError::UnsupportedFormat { file: chip_name.to_string() }),
+    };
 
-impl DeviceData {
-    fn new(name: &str, is_vis: bool, u_length: usize, spc_length: usize) -> DeviceData {
-        DeviceData {
-            name: name.to_string(),
-            is_vis,
-            u: vec![0.0; u_length],
-            j: vec![0.0; u_length],
-            luminance: vec![0.0; u_length],
-            eqe: vec![0.0; u_length],
-            wavelength: vec![0.0; spc_length],
-            spectra: vec![vec![0.0; spc_length]; u_length],
-            max_j: 0.0,
-            max_lumi: 0.0,
-            max_eqe: 0.0,
-            valid_eqe: 0.0,
-            leak_j: 0.0,
-        }
+    match extract_device_data_old(chip_name.to_string(), &mut workbook) {
+        Ok(chip_data) => Ok((chip_data, None)),
+        Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, parent_path) {
+            Ok((chip_data, warning)) => Ok((chip_data, warning)),
+            Err(msg) => Err(CoreError::UnsupportedFormat { file: msg }),
+        },
     }
-    fn remove_invalid_voltage(&mut self) {
-        // 电压下降（击穿、烧坏）判断
-        let voltage_index_until = self.u.iter().enumerate().position(|(i, v)| {
-            if i == 0 {
-                return false
-            } else {
-                // 电压波动应该不会被误判……吧
-                return v < &self.u[i - 1] && v.ceil() < self.u[i - 1].floor()
+}
+
+/// 对应 GUI `open_path`：目录批量解析（事件 emit 由宿主 GUI 层完成）
+pub fn parse_dir(path: &Path) -> Result<DirOutcome, CoreError> {
+    let path_buf = path.to_path_buf();
+    let mut paths = Vec::<PathBuf>::new();
+    for entry in path_buf.read_dir().unwrap() {
+        if let Ok(e) = entry {
+            let file_name = e.file_name().into_string().unwrap();
+            if file_name.ends_with(".xlsx") {
+                paths.push(path_buf.join(file_name));
             }
-        });
-        if let Some(until) = voltage_index_until {
-            self.u.drain(until..);
-            self.j.drain(until..);
-            self.luminance.drain(until..);
-            self.eqe.drain(until..);
-            self.spectra.drain(until..);
         }
     }
-    fn calc_summary_data(&mut self) {
-        self.max_lumi = self
-            .luminance
-            .clone()
-            .into_iter()
-            .reduce(f64::max)
-            .unwrap_or(0.);
-        self.max_eqe = self.eqe.clone().into_iter().reduce(f64::max).unwrap_or(0.);
-        self.max_j = self.j.clone().into_iter().reduce(f64::max).unwrap_or(0.);
 
-        // 寻找有效EQE范围（不低于最高亮度10%）起始
-        let valid_index_from = self
-            .luminance
-            .iter()
-            .position(|l| *l >= self.max_lumi * 0.1)
-            .unwrap_or(0);  // 找不到就设为数组头吧
-        // 寻找漏电流截止位置（开压位置），找不到就设为数组尾吧
-        let leak_index_until = self.luminance.iter().position(|l| *l > 0.0).unwrap_or(self.u.len());
-        /*
-            唉，真遇上奇怪数据找不准这些值，要是搞成异常处理麻烦得要死，
-            加上数据主体又不是读不进来，这里不对劲也不能算作异常，
-            就这样给个奇怪的值出来，到时候可视化的时候显示不对劲交给用户判断去吧
-        */ 
-
-        self.valid_eqe = self.eqe[valid_index_from..]
-            .to_vec()
-            .into_iter()
-            .reduce(f64::max)
-            .unwrap_or(0.);
-        self.leak_j = self.j[..leak_index_until]
-            .iter()
-            .fold(0.0, |acc, j| acc + j)
-            / (leak_index_until as f64);
+    if paths.len() == 0 {
+        return Err(CoreError::EmptyDir);
     }
+
+    let mut chips = Vec::<Chip>::new();
+    let mut warn_msgs = Vec::<String>::new();
+    let mut error_msgs = Vec::<String>::new();
+
+    let read_results = paths
+        .par_iter()
+        .map(|path| {
+            let chip_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+            // 损坏/非 xlsx 文件计入 errors 而非 panic（ISSUES #5）
+            let mut workbook: Xlsx<_> = match open_workbook(path) {
+                Ok(wb) => wb,
+                Err(_) => return Err(chip_name + " 表格的格式不受支持"),
+            };
+
+            match extract_device_data_old(chip_name.to_string(), &mut workbook) {
+                Ok(chip_data) => Ok((chip_data, None)),
+                Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, path_buf.clone()) {
+                    Ok((chip_data, warning)) => Ok((chip_data, warning)),
+                    Err(msg) => Err(msg + " 表格的格式不受支持")
+                }
+            }
+        })
+        .collect::<Vec<Result<(Chip, Option<String>), String>>>();
+
+    for result in read_results.into_iter() {
+        match result {
+            Ok((chip_data, warning)) => {
+                chips.push(chip_data);
+                if warning.is_some() {
+                    warn_msgs.push(warning.unwrap());
+                }
+            },
+            Err(msg) => error_msgs.push(msg)
+        }
+    };
+
+    if chips.len() == 0 {
+        return Err(CoreError::NoSupportedData);
+    }
+
+    Ok(DirOutcome { chips, warnings: warn_msgs, errors: error_msgs })
 }
 
 fn is_empty_data(device_data: &DeviceData) -> bool {
@@ -122,7 +116,12 @@ where
         return Err(file_name);
     }
 
-    let chip_name = file_name.split(',').collect::<Vec<&str>>()[2].to_owned();
+    // 文件名不含两个逗号（无关命名的 xlsx）走错误通道而非 panic（ISSUES #5）
+    let parts: Vec<&str> = file_name.split(',').collect();
+    if parts.len() < 3 {
+        return Err(file_name);
+    }
+    let chip_name = parts[2].to_owned();
 
     let mut spc_file_str = String::new();
 
@@ -154,17 +153,17 @@ where
             piece.parse::<f64>().unwrap_or(0.0)
         }).collect::<Vec<f64>>()
     };
-    
+
     let mut number_of_devices: usize = 1;
-    
+
     for i in 0..sheets[0].1.height() {
         if sheets[0].1.get_value((i as u32, 0)).unwrap() == &Data::Empty {
             number_of_devices = number_of_devices + 1;
         }
     }
-    
+
     let u_length = (sheets[0].1.height() - number_of_devices)/number_of_devices;
-    
+
     let spc_str_vec: Vec<&str> = if !wavelength.is_empty() {
         let vec: Vec<&str> = spc_data_str.trim().split_whitespace().collect();
         if vec.len() == number_of_devices * u_length {
@@ -176,11 +175,11 @@ where
     } else {
         vec![""; number_of_devices * u_length]
     };
-    
+
     let mut device_data_vec: Vec<Range<Data>> = Vec::new();
 
     for i in 0..number_of_devices {
-        let row = 
+        let row =
         (&sheets[0].1).range(
             ((i*(u_length + 1) + 1) as u32, 0),
             (((i + 1)*(u_length + 1) - 1) as u32, sheets[0].1.width() as u32));
@@ -268,6 +267,10 @@ where
     T: std::io::Read,
 {
     let sheets = workbook.worksheets();
+    // 主表行数 < 2 时 u_length 会 usize 下溢，走错误通道而非 panic（ISSUES #5）
+    if sheets[0].1.height() < 2 {
+        return Err(chip_name);
+    }
     let u_length = sheets[0].1.height() - 2;
     let mut spc_length = 1;
     for sheet in sheets[1..].iter() {
@@ -374,85 +377,34 @@ where
     })
 }
 
-#[tauri::command]
-pub fn open_one_file(path: String) -> Result<(String, Option<String>), String> {
-    let path_buf = PathBuf::from(path);
-    let parent_path = path_buf.parent().unwrap().to_path_buf();
-    let chip_name = path_buf.file_stem().unwrap().to_str().unwrap();
-    let mut workbook: Xlsx<_> = open_workbook(&path_buf).unwrap();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    match extract_device_data_old(chip_name.to_string(), &mut workbook) {
-        Ok(chip_data) => Ok((serde_json::to_string(&chip_data).unwrap(), None)),
-        Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, parent_path) {
-            Ok((chip_data, warning)) => Ok((serde_json::to_string(&chip_data).unwrap(), warning)),
-            Err(msg) => Err(msg + " 表格的格式不受支持")
-        }
-    }
-}
-
-#[tauri::command]
-pub fn open_path(app: AppHandle, path: String) -> Result<String, String> {
-    let path_buf = PathBuf::from(path);
-    let mut paths = Vec::<PathBuf>::new();
-    for entry in path_buf.read_dir().unwrap() {
-        if let Ok(e) = entry {
-            let file_name = e.file_name().into_string().unwrap();
-            if file_name.ends_with(".xlsx") {
-                paths.push(path_buf.join(file_name));
-            }
-        }
+    // 新格式的唯一干净 Err 路径：首表 height <= 1（越过旧格式解析器直接测）
+    #[test]
+    fn extract_device_data_errs_on_thin_sheet() {
+        let dir = std::env::temp_dir().join(format!("ledata_core_test_thin_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a,b,c.xlsx");
+        let mut wb = rust_xlsxwriter::Workbook::new();
+        wb.add_worksheet().write(0, 0, "only header").unwrap();
+        wb.save(&path).unwrap();
+        let mut workbook: Xlsx<_> = open_workbook(&path).unwrap();
+        let result = extract_device_data("a,b,c".to_string(), &mut workbook, dir.clone());
+        assert_eq!(result.unwrap_err(), "a,b,c");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
-    if paths.len() == 0 {
-        return Err("该目录为空".to_string());
+    // parse_file 对格式不支持文件的错误文案与原 GUI 逐字一致
+    #[test]
+    fn unsupported_format_message() {
+        let e = CoreError::UnsupportedFormat { file: "bad".into() };
+        assert_eq!(e.to_string(), "bad 表格的格式不受支持");
+        assert_eq!(CoreError::EmptyDir.to_string(), "该目录为空");
+        assert_eq!(
+            CoreError::NoSupportedData.to_string(),
+            "该目录下没有找到符合支持格式的数据表格"
+        );
     }
-
-    let mut chips: Vec<Chip> = Vec::new();
-    let mut warn_msgs: Vec<String> = Vec::new();
-    let mut error_msgs: Vec<String> = Vec::new();
-
-    let read_results = paths
-        .par_iter()
-        .map(|path| {
-            let chip_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-            let mut workbook: Xlsx<_> = open_workbook(path).unwrap();
-
-            match extract_device_data_old(chip_name.to_string(), &mut workbook) {
-                Ok(chip_data) => Ok((chip_data, None)),
-                Err(_) => match extract_device_data(chip_name.to_string(), &mut workbook, path_buf.clone()) {
-                    Ok((chip_data, warning)) => Ok((chip_data, warning)),
-                    Err(msg) => Err(msg + " 表格的格式不受支持")
-                }
-            }
-        })
-        .collect::<Vec<Result<(Chip, Option<String>), String>>>();
-
-    for result in read_results.into_iter() {
-        match result {
-            Ok((chip_data, warning)) => {
-                chips.push(chip_data);
-                if warning.is_some() {
-                    warn_msgs.push(warning.unwrap());
-                }
-            },
-            Err(msg) => error_msgs.push(msg)
-        }
-    };
-
-    if chips.len() == 0 {
-        return Err("该目录下没有找到符合支持格式的数据表格".to_string());
-    } else {
-        if error_msgs.len() != 0 {
-            let error_text = error_msgs.join("<br>");
-            app.emit_to(EventTarget::any(), "fail-to-open", "以下文件的表格格式不受支持:<br>".to_string() + &error_text)
-                .unwrap();
-        }
-        if warn_msgs.len() != 0 {
-            let warn_text = warn_msgs.join("<br>");
-            app.emit_to(EventTarget::any(), "no-match-spc", warn_text)
-                .unwrap();
-        }
-    }
-
-    Ok(serde_json::to_string(&chips).unwrap())
 }

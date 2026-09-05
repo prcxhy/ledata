@@ -19,13 +19,21 @@ const dataIndecies: Ref<number[][]> = ref([]);
 
 const CHIPS: Ref<(ChipData)[]> = ref([new ChipData('', [])]);
 
-const messageText = ref('');
-const messageType = ref('ok')
+interface Toast {
+  id: number;
+  text: string;
+  type: 'ok' | 'error' | 'warn';
+}
+
+const toasts = ref<Toast[]>([]);
+let toastSeq = 0;
 
 function showMessage(text: string, type: 'ok' | 'error' | 'warn') {
-  messageText.value = text;
-  messageType.value = type;
-  setTimeout(() => messageText.value = '', 3000);
+  const id = ++toastSeq;
+  toasts.value.push({ id, text, type });
+  setTimeout(() => {
+    toasts.value = toasts.value.filter(t => t.id !== id);
+  }, 3000);
 }
 
 appWebview.listen<string>('fail-to-open', (event) => {
@@ -211,11 +219,13 @@ function excludeAll(chipIndex: number) {
 
 <template>
   <Teleport to="body">
-    <Transition>
-      <p ref="message" v-if="messageText != ''" :class="['message', messageType]">
-        <span v-html="messageText"></span>
-      </p>
-    </Transition>
+    <div id="toasts">
+      <TransitionGroup name="v">
+        <p v-for="toast in toasts" :key="toast.id" :class="['message', toast.type]">
+          <span v-html="toast.text"></span>
+        </p>
+      </TransitionGroup>
+    </div>
   </Teleport>
   <nav>
     <button @click="openDataFile">
@@ -270,15 +280,24 @@ nav > button {
   padding-left: 1.5mm;
 }
 
+#toasts {
+  position: fixed;
+  top: 2mm;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2mm;
+  z-index: 2;
+  pointer-events: none;
+}
+
 .message {
   background-color: rgba(250, 250, 250, 0.7);
-  position: relative;
   padding: 2mm 3mm 2mm 2mm;
   border-radius: 2mm;
-  top: 2mm;
   font-size: 3.6mm;
-  margin: 0px auto;
-  justify-self: center;
   z-index: 2;
   filter: drop-shadow(0px 0px 8px rgba(0, 0, 0, 0.1));
   overflow: hidden;

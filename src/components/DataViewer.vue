@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as echarts from 'echarts';
 import { nextTick, ref, useTemplateRef, watch } from 'vue';
-import { DeviceData, drawChart, drawSpectra } from '../scripts/DeviceData';
+import { DeviceData, drawChart, drawSpectra, formatPerformance, formatSpectra } from '../scripts/DeviceData';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import IconCopy from '../assets/clipboard.svg?component';
 import IconExport from '../assets/down-picture.svg?component';
@@ -99,58 +99,14 @@ const emit = defineEmits(["message"]);
 
 function copyPerformance() {
     if(prop.data.length > 0) {
-        let row0 = 'U';
-        let row1 = 'V';
-        let row2 = '';
-        for(var i = 0; i < prop.data.length; i ++) {
-            row0 += prop.data[i]!.is_vis? '\tJ\tLuminance\tEQE': '\tJ\tRadiance\tEQE';
-            row1 += prop.data[i]!.is_vis? '\tmA/cm²\tcd/m²\t%': '\tmA/cm²\tW/sr/m²\t%';
-            row2 += `\t${prop.data[i]!.name}\t${prop.data[i]!.name}\t${prop.data[i]!.name}`;
-        }
-        let str = `${row0}\n${row1}\n${row2}\n`;
-        prop.data[indexOfLongestU.value]!.u.forEach((uVal, index) => {
-            let row = prop.data.map(d => {
-                if(d && d.u.length > index) {
-                    return [d.j[index], d.luminance[index], d.eqe[index]]
-                } else {
-                    return ['','','']
-                }
-            }).flat();
-            row.splice(0, 0, uVal);
-            let rowString = row.join('\t') + '\n';
-            str += rowString;
-        })
-        writeText(str);
+        writeText(formatPerformance(prop.data, indexOfLongestU.value));
         emit("message", "已将性能数据复制到剪贴板，可在Origin直接粘贴", "ok");
     }
 }
 
 function copySpectra() {
     if(prop.data.length > 0) {
-        let row0 = 'Wavelength';
-        let row1 = 'nm';
-        let row2 = '';
-        for(var i = 0; i < prop.data.length; i ++) {
-            if(prop.data[i]!.u.length <= uIndex.value) {
-                continue;
-            }
-            row0 +='\tIntensity';
-            row2 +=`\t${prop.data[i]!.name}`;
-        }
-        let str = `${row0}\n${row1}\n${row2}\n`;
-        prop.data[0]!.wavelength.forEach((lambda, index) => {
-            let row = prop.data.map(d => {
-                if(d && d.u.length > uIndex.value) {
-                    return [d.spectra[uIndex.value][index]]
-                } else {
-                    return []
-                }
-            }).flat();
-            row.splice(0, 0, lambda);
-            let rowString = row.join('\t') + '\n';
-            str += rowString;
-        })
-        writeText(str);
+        writeText(formatSpectra(prop.data, uIndex.value));
         emit("message", "已将当前光谱数据复制到剪贴板，可在Origin直接粘贴", "ok");
     }
 }

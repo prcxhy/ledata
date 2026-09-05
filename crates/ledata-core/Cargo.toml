@@ -1,0 +1,16 @@
+[package]
+name = "ledata-core"
+version = "1.5.0"
+description = "LEData 核心数据提取库（GUI / Python / CLI 共用的单一事实源）"
+authors = ["prcxhy"]
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+calamine = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+rust_xlsxwriter = "0.99"
+serde_json = { workspace = true }
